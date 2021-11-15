@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  data_provider:
+    container_name: data_provider
+    build:
+      context: ../visualisation/data-provider
+      dockerfile: ../data-provider/Dockerfile_provider
+    ports:
+      - 5000:5000
+    volumes:
+      - ../visualisation/data-provider:/app
+  #   depends_on:
+  #     database_auth:
+  #       condition: service_healthy
+  # database_auth:
+  #   image: postgres:9.6.21-alpine
+  #   container_name: database_auth
+  #   environment:
+  #     - POSTGRES_DB=zpi
+  #     - POSTGRES_USERNAME=postgres
+  #     - POSTGRES_PASSWORD=postgres
+  #   ports:
+  #     - 5432:5432
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
