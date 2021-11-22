@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-docker_compose_provider="docker/docker-compose-provider.yaml"
+docker_compose_provider="docker-compose-dev.yml"
 
 provider_build() {
     docker-compose -f $docker_compose_provider build
