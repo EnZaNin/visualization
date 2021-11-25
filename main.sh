@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-docker_compose_provider="docker/docker-compose-provider.yaml"
+docker_compose_provider="docker-compose-dev.yml"
 
 provider_build() {
     docker-compose -f $docker_compose_provider build
@@ -13,6 +13,12 @@ provider_up() {
 clear_all() {
   docker stop $(docker ps -a -q)
   docker rm $(docker ps -a -q)
+}
+
+provider_restart() {
+  clear_all
+  provider_build
+  provider_up
 }
 
 main() {
