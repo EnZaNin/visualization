@@ -14,8 +14,11 @@ import matplotlib.dates as mdates
 import datetime as dt
 from .polish_data import get_gov_data, get_szczepienia_data
 
+import logging
+LOGGER = logging.getLogger('StateHandler')
+
 file = 'owid-covid-data.csv'
-URL = 'https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/' + file
+URL = 'https://covid.ourworldindata.org/data/' + file
 if not os.path.isfile(file):
     print('Download file from ', URL)
     urllib.request.urlretrieve(URL, file)
@@ -31,8 +34,8 @@ df_clear = df[['iso_code', 'continent', 'location', 'date', 'population', 'total
                'people_vaccinated', 'people_fully_vaccinated', 'total_boosters', 'new_vaccinations']]
 df_clear['date'] = df_clear['date'].astype('datetime64[ns]')
 
-poland_df_clear = df_clear[df_clear['location'] == 'Poland']
-poland_df_clear = poland_df_clear.append(df_clear[df_clear['location'] == 'Germany'])
+poland_df_clear = df_clear[(df_clear['location'] == 'Poland') | (df_clear['location'] == 'Germany')]
+# poland_df_clear = poland_df_clear.append(df_clear[df_clear['location'] == 'Germany'])
 # poland_df_clear = poland_df_clear[poland_df_clear['date'].dt.year == 2021]
 
 
@@ -45,7 +48,15 @@ from typing import Optional
 from .schemas.seaborn_schema import LinePlot
 from matplotlib.dates import MO, TU, WE, TH, FR, SA, SU
 
-app_provider = FastAPI()
+app_provider = FastAPI(title="CovidEDA",
+    # description=description,
+    # version="0.0.1",
+    # terms_of_service="http://example.com/terms/",
+    contact={
+        "name": "Tomasz Wawrykowicz",
+        # "url": "http://x-force.example.com/contact/",
+        "email": "246823@student.pwr.edu.pl",
+    },)
 
 @app_provider.post('/lineplot')
 async def lineplot(parameters: LinePlot):
@@ -90,7 +101,7 @@ async def histplot(chart_name: str, data_source: str, parameters: LinePlot):
     ax.xaxis.set_major_locator(mdates.MonthLocator())
     plt.xticks(rotation=45)
     fig = ax.get_figure()
-    # plt.figure(figsize=(24, 13.5), dpi=80)
+    plt.figure(figsize=(24, 13.5), dpi=80)
     fig.savefig(chart)
     print(chart)
     return FileResponse(chart)
@@ -110,9 +121,15 @@ async def heatmap():
 
 from .database import engine, Base
 Base.metadata.create_all(engine)
-# df.to_sql('owid', con=engine, if_exists='replace', index=False)
-# # engine.execute("SELECT * FROM users").fetchall()
 
+# # engine.execute("SELECT * FROM users").fetchall()
+from sqlalchemy import inspect
+inspector = inspect(engine)
+
+if not inspector.has_table(engine, 'owid'):
+    LOGGER.info('no chyba nmie dziala')
+    print('no chyba nie dziala')
+    # df.to_sql('owid', con=engine, if_exists='replace', index=False)
 from sqlalchemy.orm import Session
 from .dependencies import get_db
 from fastapi import Depends
@@ -120,7 +137,7 @@ from fastapi import Depends
 
 @app_provider.get('/dataframe')
 def get_users(db: Session = Depends(get_db)):
-    db_data = pd.read_sql_query('''select date, new_cases, total_cases from owid where location = 'Poland' ''', engine)
+    db_data = pd.read_sql_query(''' select sum(w3_zaszczepieni_pelna_dawka) from poland_vacc where dane_na_dzien = '2021-11-24' ''', engine)
     # db_data = db.query('table_owid').offset(0).all()
     #     # db_data = engine.execute('select * from table_owid').fetchall()
     #     db_data = DataDbTools(db)
@@ -128,6 +145,13 @@ def get_users(db: Session = Depends(get_db)):
     
     print(db_data.info())
     return db_data
+
+@app_provider.post('/sql_query')
+def set_dataframe_by_sql_query(condition: str):
+    
+    df = pd.read_sql_query(f''' {condition} ''', engine)
+    return df
+
 
 @app_provider.get('/{chart_name}')
 def get_chart_by_name(chart_name: str):
@@ -139,10 +163,15 @@ def get_chart_by_name(chart_name: str):
 
 
 # df = get_gov_data()
-# df_szcza = get_szczepienia_data()
+df_szcza = get_szczepienia_data()
 # df_szcza = df_szcza.loc[:1, 'gmina_nazwa']
 # print(df_szcza.to_json())
 # df_szcza = df_szcza.to_html()
+
+if not inspector.has_table(engine, 'poland_vacc'):
+    LOGGER.info('no chyba dziala')
+    print('no chyba dziala')
+    # df_szcza.to_sql('poland_vacc', con=engine, if_exists='replace', index=False)
 
 # print(df_szcz)
 

@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import requests
 import datetime
@@ -77,3 +78,65 @@ def get_szczepienia_data() -> DataFrame:
     mz_df.to_csv('szczepienia.csv', index=False)
 
     return mz_df
+
+
+def get_wojewodztwa_data() -> DataFrame:
+    szczep_df = get_szczepienia_data()
+    other_df = get_gov_data()
+    szczep_df = szczep_df.groupby(['wojewodztwo_nazwa', 'dane_na_dzien']). \
+        agg({'liczba_ludnosci': np.sum,
+             'w1_zaszczepieni_pacjenci': np.sum,
+             'w3_zaszczepieni_pelna_dawka': np.sum,
+             '%_zaszczepionych': np.sum,
+             '%_zaszczepionych_pen_dawk': np.sum,
+             'w1_zaszczepieni_w_wieku_0_11': np.sum,
+             'w1_zaszczepieni_w_wieku_12_19': np.sum,
+             'w1_zaszczepieni_w_wieku_20_39': np.sum,
+             'w1_zaszczepieni_w_wieku_40_59': np.sum,
+             'w1_zaszczepieni_w_wieku_60_69': np.sum,
+             'w1_zaszczepieni_w_wieku_70plus': np.sum,
+             'w3_zaszczepieni_pen_dawk_w_wieku_0_11': np.sum,
+             'w3_zaszczepieni_pen_dawk_w_wieku_12_19': np.sum,
+             'w3_zaszczepieni_pen_dawk_w_wieku_20_39': np.sum,
+             'w3_zaszczepieni_pen_dawk_w_wieku_40_59': np.sum,
+             'w3_zaszczepieni_pen_dawk_w_wieku_60_69': np.sum,
+             'w3_zaszczepieni_pen_dawk_w_wieku_70plus': np.sum
+             })
+    szczep_df = szczep_df.reset_index(level=['wojewodztwo_nazwa', 'dane_na_dzien'])
+
+    woj_df = other_df.merge(szczep_df, left_on=['wojewodztwo', 'stan_rekordu_na'],
+                            right_on=['wojewodztwo_nazwa', 'dane_na_dzien'], how='right')
+    del woj_df['wojewodztwo_nazwa']
+    del woj_df['dane_na_dzien']
+
+    return woj_df
+
+
+def get_powiat_szczep_data():
+    if os.path.isfile('szczep_rap.csv'):
+        return pd.read_csv('szczep_rap.csv')
+    url = 'https://arcgis.com/sharing/rest/content/items/3f47db945aff47e582db8aa383ccf3a1/data'
+    r = requests.get(url)
+
+    with open('data_szczepienia.zip', 'wb') as fd:
+        for chunk in r.iter_content(chunk_size=128):
+            fd.write(chunk)
+    if os.path.isdir('data_szczepienia'):
+        Path('data_szczepienia').mkdir(parents=True, exist_ok=True)
+
+    with zipfile.ZipFile('data_szczepienia.zip', 'r') as zip_ref:
+        list_of_files = zip_ref.namelist()
+        for file in list_of_files:
+            path = Path('data_szczepienia/' + file)
+            if path.is_file() is False:
+                zip_ref.extract(member=file, path='data_szczepienia')
+
+    cwd = os.path.abspath('data_szczepienia')
+    files = os.listdir(cwd)
+
+    for count, file in enumerate(files):
+        if file.endswith('rap_rcb_pow_szczepienia.csv'):
+            current_file = pd.read_csv("data_szczepienia/" + file, delimiter=';', encoding='windows-1250')
+            current_file.to_csv('szczep_rap.csv')
+
+            return current_file
