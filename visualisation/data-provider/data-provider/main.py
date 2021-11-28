@@ -3,7 +3,6 @@ from fastapi import FastAPI, Response, HTTPException, Query, Path
 
 import urllib.request
 import os
-# import io
 import pandas as pd
 from pandas.core.frame import DataFrame
 
@@ -12,40 +11,32 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import datetime as dt
-from .polish_data import get_gov_data, get_szczepienia_data
+from .polish_data import get_gov_data, get_szczepienia_data, get_powiat_present_data, get_wojewodztwa_data
+from .owid_data import get_df_full, get_df_small, get_df_with_columns
+# from .schemas.polish import DataFrameSchema
 
 import logging
 LOGGER = logging.getLogger('StateHandler')
 
-file = 'owid-covid-data.csv'
-URL = 'https://covid.ourworldindata.org/data/' + file
-if not os.path.isfile(file):
-    print('Download file from ', URL)
-    urllib.request.urlretrieve(URL, file)
-    print('Download success')
-else:
-    print(f'File {file} is already downloaded')
+df = get_df_full()
+df_small = get_df_small()
+pol_gov_data = get_gov_data()
+odsetek_data = get_szczepienia_data()
+wojew_data = get_wojewodztwa_data()
 
-df = pd.read_csv('owid-covid-data.csv')
+dict = {'df': df, 'df_small': df_small, 'pol_data': pol_gov_data, 'comm_data': odsetek_data, 'prov_data': wojew_data}
+# powiat_data = get_powiat_present_data()
 
-
-df_clear = df[['iso_code', 'continent', 'location', 'date', 'population', 'total_cases', 'new_cases', 'total_deaths', 'new_deaths',
-               'icu_patients', 'hosp_patients', 'total_tests', 'new_tests', 'tests_units', 'total_vaccinations',
-               'people_vaccinated', 'people_fully_vaccinated', 'total_boosters', 'new_vaccinations']]
-df_clear['date'] = df_clear['date'].astype('datetime64[ns]')
-
-poland_df_clear = df_clear[(df_clear['location'] == 'Poland') | (df_clear['location'] == 'Germany')]
+# poland_df_clear = df_clear[(df_clear['location'] == 'Poland') | (df_clear['location'] == 'Germany')]
 # poland_df_clear = poland_df_clear.append(df_clear[df_clear['location'] == 'Germany'])
 # poland_df_clear = poland_df_clear[poland_df_clear['date'].dt.year == 2021]
 
 
-# bytes_image = io.BytesIO()
-# plt.savefig(ax, format='png')
-# bytes_image.seek(0)
 
 from fastapi.responses import FileResponse
 from typing import Optional
 from .schemas.seaborn_schema import LinePlot
+from .schemas.owid import OwidData
 from matplotlib.dates import MO, TU, WE, TH, FR, SA, SU
 
 app_provider = FastAPI(title="CovidEDA",
@@ -77,27 +68,62 @@ async def lineplot(parameters: LinePlot):
     print(chart)
     return FileResponse(chart)
 
+import re
+
 @app_provider.post('/boxplot')
-async def boxplot(*, q: list = Query([])):
-    # return ':)'
+async def boxplot(*, columns: list = Query([]), q: list = Query([]), data_source: Optional[str] = None):
     # print(**q)
+    if data_source in dict.keys():
+        dataframe = dict.get(data_source)
+    else:
+        raise HTTPException(status_code=404, detail='Please, select correctly data source')
+    if len(columns) != 0:
+        dataframe = dataframe[columns]
+    for param in q:
+        date_from = re.match(r'(?P<column>.*) > (?P<value>.*)', param)
+        if date_from:
+            date_from_datetype = dt.datetime.strptime(date_from.group('value'), '%Y-%m-%d')
+            dataframe = dataframe[dataframe['date'] > date_from_datetype]
+            if dataframe.size == 0:
+                raise HTTPException(status_code=404, detail='Ups, your query is wrong (date_from)')
+        date_to = re.match(r'(?P<column>.*) < (?P<value>.*)', param)
+        if date_to:
+            date_to_datetype = dt.datetime.strptime(date_to.group('value'), '%Y-%m-%d')
+            dataframe = dataframe[dataframe['date'] < date_to_datetype]
+            if dataframe.size == 0:
+                raise HTTPException(status_code=404, detail='Ups, your query is wrong (date_to)')
+        in_list = re.match(r'(?P<column>.*) in (?P<value>.*)', param)
+        if in_list:
+            dataframe = dataframe[dataframe[in_list.group('column')].isin(in_list.group('value').split(" "))]
+            if dataframe.size == 0:
+                raise HTTPException(status_code=404, detail='Ups, your query is wrong (in)')
+        is_value = re.match(r'(?P<column>.*) = (?P<value>.*)', param)
+        if is_value:
+            dataframe = dataframe[dataframe[is_value.group('column')] == is_value.group('value')]
+            if dataframe.size == 0:
+                raise HTTPException(status_code=404, detail='Ups, your query is wrong (=)')
+
+    print(dataframe.info())
     query_items = {"q": q}
     return query_items
-    # ax = sns.lineplot(q)
 
 
 @app_provider.post('/histplot')
-async def histplot(chart_name: str, data_source: str, parameters: LinePlot):
-    # return ':)'
+async def histplot(parameters: LinePlot, chart_name: str, data_source: Optional[str] = None, owid_source: Optional[OwidData] = None):  # , data_frame: Optional[DataFrameSchema] = None):
+    # if data_frame and data_source:
+        # raise HTTPException(status_code=404, detail='Please, select one: DataFrame or DataSource')
     chart = chart_name + '.png'
     if os.path.isfile(chart):
         # os.remove(chart_name)
         raise HTTPException(status_code=404, detail='Chart with that name already exist')
-    if data_source == 'poland_df_clear':
-            dataframe = poland_df_clear
+    if data_source in dict.keys():
+        dataframe = dict.get(data_source)
+    for param in owid_source:
+        if param:
+            dataframe
+
     plt.clf()
     ax = sns.lineplot(data=dataframe, **parameters.dict())
-    # ax = sns.lineplot(parameters)
     ax.xaxis.set_major_locator(mdates.MonthLocator())
     plt.xticks(rotation=45)
     fig = ax.get_figure()
@@ -122,7 +148,6 @@ async def heatmap():
 from .database import engine, Base
 Base.metadata.create_all(engine)
 
-# # engine.execute("SELECT * FROM users").fetchall()
 from sqlalchemy import inspect
 inspector = inspect(engine)
 
@@ -133,7 +158,6 @@ if not inspector.has_table(engine, 'owid'):
 from sqlalchemy.orm import Session
 from .dependencies import get_db
 from fastapi import Depends
-# from .cruds.cruds import DataDbTools
 
 @app_provider.get('/dataframe')
 def get_users(db: Session = Depends(get_db)):
@@ -163,7 +187,7 @@ def get_chart_by_name(chart_name: str):
 
 
 # df = get_gov_data()
-df_szcza = get_szczepienia_data()
+# df_szcza = get_szczepienia_data()
 # df_szcza = df_szcza.loc[:1, 'gmina_nazwa']
 # print(df_szcza.to_json())
 # df_szcza = df_szcza.to_html()

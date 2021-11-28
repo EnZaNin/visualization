@@ -21,6 +21,7 @@ else:
 # możliwe że trzeba przerzucić się na sql z powodu grupowania itp.
 
 df = pd.read_csv('owid-covid-data.csv')
+df['date'] = df['date'].astype('datetime64[ns]')
 
 pop_file = pd.read_csv(
     'https://raw.githubusercontent.com/owid/covid-19-data/master/scripts/input/un/population_latest.csv')
@@ -37,7 +38,7 @@ def get_df_full():
 
 
 df_small = df[['iso_code', 'continent', 'location', 'date', 'population', 'total_cases', 'new_cases', 'total_deaths', 'new_deaths',
-               'icu_patients', 'hosp_patients', 'total_tests', 'new_tests', 'tests_units', 'total_vaccinations',
+               'icu_patients', 'hosp_patients', 'total_tests', 'new_tests', 'total_vaccinations',
                'people_vaccinated', 'people_fully_vaccinated', 'total_boosters', 'new_vaccinations', 'median_age', 'aged_70_older']]
 
 def get_df_small():
