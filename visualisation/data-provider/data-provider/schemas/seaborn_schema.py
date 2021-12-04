@@ -1,9 +1,8 @@
-from typing import Optional
+from typing import Optional, Any
 from pydantic import BaseModel
 
+
 class LinePlot(BaseModel):
-    # data_source: str
-    # chart_name: str
 
     x: Optional[str] = None
     y: Optional[str] = None
@@ -30,5 +29,21 @@ class LinePlot(BaseModel):
     # legend: Optional[str] = 'auto'
     # ax: Optional[str] = None
 
-    class Config:
-        orm_mode = True
+
+class BoxPlot(BaseModel):
+    x: Optional[str] = None
+    y: Optional[str] = None
+    hue: Optional[str] = None
+    orient: Optional[str] = None
+
+
+class HistPlot(BaseModel):
+    x: Optional[str] = None
+    y: Optional[str] = None
+    hue: Optional[str] = None
+    # weights: Optional[any]
+    stat: Optional[str] = 'count'
+    # bins: Optional[Any] = 'auto'
+    # binwidth = None, binrange = None,
+    # discrete: Optional[bool] = False
+    # kde: Optional[bool] = False
