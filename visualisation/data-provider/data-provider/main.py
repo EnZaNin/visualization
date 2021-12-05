@@ -1,23 +1,22 @@
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import datetime as dt
 import logging
 
 from http.client import HTTPException
 import re
-from fastapi import FastAPI, Response, HTTPException, Query, Path
+from fastapi import FastAPI, HTTPException, Query
 
 import urllib.request
 import os
 import pandas as pd
 from matplotlib import ticker
-from pandas.core.frame import DataFrame
+from fastapi.responses import FileResponse
+from typing import Optional
+from .schemas.seaborn_schema import LinePlot, BoxPlot, HistPlot, ScatterPlot, JointPlot, RelPlot
 
-from .polish_data import get_district_stats_data, get_district_vacc_data, get_powiat_present_data, \
-    get_pol_df_by_condition, get_province_full
-from .owid_data import get_owid_full, get_owid_small, get_owid_df_with_columns
+from .polish_data import get_district_stats_data, get_district_vacc_data, get_province_full
+from .owid_data import get_owid_full, get_owid_small
 from .methods import get_filtered_data, auto_scaler_date, pca_method
 
 pd.options.mode.chained_assignment = None  # default='warn'
@@ -40,16 +39,9 @@ dict_polish = {'district_stats': district_stats_data, 'district_vacc': district_
                'prov_data': province_full_data}
 dict = {**dict_owid, **dict_polish}
 
-# poland_df_clear = df_clear[(df_clear['location'] == 'Poland') | (df_clear['location'] == 'Germany')]
-# poland_df_clear = poland_df_clear.append(df_clear[df_clear['location'] == 'Germany'])
-# poland_df_clear = poland_df_clear[poland_df_clear['date'].dt.year == 2021]
 
 
-from fastapi.responses import FileResponse
-from typing import Optional
-from .schemas.seaborn_schema import LinePlot, BoxPlot, HistPlot, ScatterPlot, JointPlot
-from .schemas.owid import OwidData
-from matplotlib.dates import MO, TU, WE, TH, FR, SA, SU
+
 
 app_provider = FastAPI(title="CovidEDA",
                        # description=description,
@@ -69,37 +61,6 @@ async def get_columns(dataframe: str):
         return list(dataframe.columns)
     else:
         raise HTTPException(status_code=404, detail='Dataframe not found')
-
-
-@app_provider.post('/lineplot_hs', summary="Create lineplot for owid data")
-async def lineplot_owid(*, data_source: str, parameters: LinePlot, columns: list = Query([]),
-                        conditions: list = Query([]), ):
-    if data_source in dict_owid.keys():
-        dataframe = dict_owid.get(data_source)
-    else:
-        raise HTTPException(status_code=404, detail='Please, select correctly data source')
-    if len(columns) != 0:
-        dataframe = dataframe[columns]
-    dataframe = get_owid_df_with_columns(dataframe=dataframe, query=conditions)
-    chart = parameters.chart_name + '.png'
-    # if os.path.isfile(chart):
-    # os.remove(chart_name)
-    # raise HTTPException(status_code=404, detail='Chart with that name already exist')
-    plt.clf()
-    try:
-        ax = sns.lineplot(data=dataframe, x=parameters.x, y=parameters.y, hue=parameters.hue)
-    except ValueError:
-        raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
-    # ax = sns.lineplot(parameters)
-    # ax.xaxis.set_major_locator(mdates.MonthLocator())
-    plt.xticks(rotation=30)
-    # y_max = dataframe[parameters.y].max()
-    # ax.set_ylim(top=1.1*y_max)
-    fig = ax.get_figure()
-    plt.figure(figsize=(24, 13.5), dpi=80)
-    fig.savefig(chart)
-    # print(chart)
-    return FileResponse(chart)
 
 
 @app_provider.post('/lineplot', summary="Create lineplot for selected data")
@@ -173,8 +134,8 @@ async def boxplot(*, params: BoxPlot, columns: list = Query([]), conditions: lis
     if not chart_name:
         raise HTTPException(status_code=404, detail='Please, give a name for chart')
     chart = chart_name + '.png'
-    # if os.path.isfile(chart):
-    #     raise HTTPException(status_code=404, detail='Chart with that name already exist')
+    if os.path.isfile(chart):
+        raise HTTPException(status_code=404, detail='Chart with that name already exist')
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
 
     plt.figure(figsize=(24, 13.5), dpi=80)
@@ -183,7 +144,7 @@ async def boxplot(*, params: BoxPlot, columns: list = Query([]), conditions: lis
         if add_points:
             sns.stripplot(data=dataframe, **params.dict(), size=4, color=".3", linewidth=0)
     except ValueError:
-        raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
+        raise HTTPException(status_code=404, detail='Ups, something was wrong, check your parameters')
     if xlabel:
         ax.set_xlabel(xlabel, fontsize=15)
     if ylabel:
@@ -199,8 +160,6 @@ async def boxplot(*, params: BoxPlot, columns: list = Query([]), conditions: lis
 async def histplot(*, params: HistPlot, columns: list = Query([]), conditions: list = Query([]),
                    data_source: Optional[str] = None, chart_name: Optional[str] = None, xlabel: Optional[str] = None,
                    ylabel: Optional[str] = None):
-    # parameters: LinePlot, chart_name: str, data_source: Optional[str] = None,
-    #            owid_source: Optional[OwidData] = None):  # , data_frame: Optional[DataFrameSchema] = None):
     plt.clf()
     if not data_source:
         dataframe = province_full_data
@@ -238,7 +197,6 @@ async def histplot(*, params: HistPlot, columns: list = Query([]), conditions: l
         ax.set_ylabel(ylabel, fontsize=15)
     fig = ax.get_figure()
     fig.savefig(chart)
-    # print(chart)
     return FileResponse(chart)
 
 
@@ -246,7 +204,6 @@ async def histplot(*, params: HistPlot, columns: list = Query([]), conditions: l
 def scatterplot(*, params: ScatterPlot, columns: list = Query([]), conditions: list = Query([]),
                 data_source: Optional[str] = None, chart_name: Optional[str] = None, xlabel: Optional[str] = None,
                 ylabel: Optional[str] = None):
-    # plt.clf()
     if not data_source:
         dataframe = province_full_data
         dataframe = dataframe[dataframe['stan_rekordu_na'].isin(dataframe.tail(7)['stan_rekordu_na'])]
@@ -292,7 +249,6 @@ def scatterplot(*, params: ScatterPlot, columns: list = Query([]), conditions: l
         ax.set_ylabel(ylabel, fontsize=15)
     fig = ax.get_figure()
     fig.savefig(chart)
-    # print(chart)
     return FileResponse(chart)
 
 
@@ -333,29 +289,14 @@ async def jointplot(*, params: JointPlot, columns: list = Query([]), conditions:
     return FileResponse(chart)
 
 
-@app_provider.post('/heatmap')
-async def heatmap():
-    return ':)'
-
-
 @app_provider.post('/catplot')
 async def catplot():
     dataframe = province_full_data
     g = sns.catplot(data=dataframe, x='stan_rekordu_na', y='liczba_przypadkow', col='wojewodztwo',
                     col_wrap=4)
-    # min_date = dataframe['stan_rekordu_na'].min()
-    # max_date = dataframe['stan_rekordu_na'].max()
-    # auto_scaler_date(min_date=min_date, max_date=max_date, ax=ax)
-    # fig = ax.get_figure()
-    # plt.xticks(rotation=30)
     for ax in g.axes.flat:
         ax.xaxis.set_major_locator(ticker.MultipleLocator(24))
-        # print(labels)
-    #     for i, l in enumerate(labels):
-    #         if i % 60 == 0:
-    #             labels[i] = ''
-    #     ax.set_xticklabels(labels, rotation=30)
-    # g.set(xticks=dataframe['stan_rekordu_na'][2::60])
+        ax.set_xticklabels(rotation=30)
     chart = 'CatPlot'
     chart = chart + '.png'
     if os.path.isfile(chart):
@@ -365,8 +306,24 @@ async def catplot():
 
 
 @app_provider.post('/relplot')
-async def relplot():
-    return ':)'
+async def relplot(*, params: RelPlot, columns: list = Query([]), conditions: list = Query([]),
+                  data_source: Optional[str] = None, chart_name: Optional[str] = None):
+    if data_source in dict.keys():
+        dataframe = dict.get(data_source)
+    else:
+        raise HTTPException(status_code=404, detail='Please, select correctly data source')
+    if not chart_name:
+        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+    chart = chart_name + '.png'
+    if os.path.isfile(chart):
+        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+    dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
+    try:
+        sns.relplot(data=dataframe, **params.dict())
+    except ValueError:
+        raise HTTPException(status_code=404, detail='Ups, something was wrong, check your parameters')
+    plt.savefig(chart)
+    return FileResponse(chart)
 
 
 @app_provider.post('/pca')
@@ -395,13 +352,10 @@ async def pca(*, columns: list = Query([]), conditions: list = Query([]),
 # inspector = inspect(engine)
 
 # if not inspector.has_table(engine, 'owid'):
-# LOGGER.info('no chyba nmie dziala')
-# print('no chyba nie dziala')
 # df.to_sql('owid', con=engine, if_exists='replace', index=False)
 # from sqlalchemy.orm import Session
 # from .dependencies import get_db
 # from fastapi import Depends
-from fastapi.responses import JSONResponse
 
 # @app_provider.get('/dataframeee')
 # def get_users(db: Session = Depends(get_db)):
@@ -440,21 +394,6 @@ def get_dataframe(dataframe: str, orient: Optional[str] = None):
     else:
         raise HTTPException(status_code=404, detail='Wrong name')
 
-# df = get_gov_data()
-# df_szcza = get_szczepienia_data()
-# df_szcza = df_szcza.loc[:1, 'gmina_nazwa']
-# print(df_szcza.to_json())
-# df_szcza = df_szcza.to_html()
-
 # if not inspector.has_table(engine, 'poland_vacc'):
-# LOGGER.info('no chyba dziala')
-# print('no chyba dziala')
 # df_szcza.to_sql('poland_vacc', con=engine, if_exists='replace', index=False)
 
-
-# from fastapi.responses import JSONResponse, HTMLResponse
-# import logging
-# LOGGER = logging.getLogger('StateHandler')
-# df_szcz = get_szczepienia_data()
-# df_szcz = df_szcz.iloc[:4, :3]
-# html_szcz = df_szcz.to_json()
