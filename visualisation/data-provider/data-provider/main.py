@@ -1,3 +1,4 @@
+import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -11,6 +12,7 @@ from fastapi import FastAPI, Response, HTTPException, Query, Path
 import urllib.request
 import os
 import pandas as pd
+from matplotlib import ticker
 from pandas.core.frame import DataFrame
 
 from .polish_data import get_district_stats_data, get_district_vacc_data, get_powiat_present_data, \
@@ -45,7 +47,7 @@ dict = {**dict_owid, **dict_polish}
 
 from fastapi.responses import FileResponse
 from typing import Optional
-from .schemas.seaborn_schema import LinePlot, BoxPlot, HistPlot
+from .schemas.seaborn_schema import LinePlot, BoxPlot, HistPlot, ScatterPlot, JointPlot
 from .schemas.owid import OwidData
 from matplotlib.dates import MO, TU, WE, TH, FR, SA, SU
 
@@ -171,8 +173,8 @@ async def boxplot(*, params: BoxPlot, columns: list = Query([]), conditions: lis
     if not chart_name:
         raise HTTPException(status_code=404, detail='Please, give a name for chart')
     chart = chart_name + '.png'
-    if os.path.isfile(chart):
-        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+    # if os.path.isfile(chart):
+    #     raise HTTPException(status_code=404, detail='Chart with that name already exist')
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
 
     plt.figure(figsize=(24, 13.5), dpi=80)
@@ -240,40 +242,130 @@ async def histplot(*, params: HistPlot, columns: list = Query([]), conditions: l
     return FileResponse(chart)
 
 
-@app_provider.get('/scatterplot')
-def scatterplot():
-    dataframe = province_full_data
-    # print(dataframe.tail(7)['stan_rekordu_na'])
-    dataframe = dataframe[dataframe['stan_rekordu_na'].isin(dataframe.tail(7)['stan_rekordu_na'])]
-    # dataframe = dataframe.groupby(['wojewodztwo']).mean()
-    # dataframe = dataframe.reset_index(level=['wojewodztwo'])
-    ax = sns.scatterplot(data=dataframe, x='liczba_przypadkow',
-                         y=dataframe['liczba_testow_z_wynikiem_negatywnym'] + dataframe[
-                             'liczba_testow_z_wynikiem_pozytywnym'], hue='wojewodztwo')
-    plt.figure(figsize=(24, 13.5), dpi=60)
-    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
-    # try:
-    #     ax = sns.histplot(data=dataframe, **params.dict())
-    # except ValueError:
-    #     raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
-    # if xlabel:
-    #     ax.set_xlabel(xlabel, fontsize=15)
-    # if ylabel:
-    #     ax.set_ylabel(ylabel, fontsize=15)
+@app_provider.post('/scatterplot')
+def scatterplot(*, params: ScatterPlot, columns: list = Query([]), conditions: list = Query([]),
+                data_source: Optional[str] = None, chart_name: Optional[str] = None, xlabel: Optional[str] = None,
+                ylabel: Optional[str] = None):
+    # plt.clf()
+    if not data_source:
+        dataframe = province_full_data
+        dataframe = dataframe[dataframe['stan_rekordu_na'].isin(dataframe.tail(7)['stan_rekordu_na'])]
+        dataframe = dataframe.groupby(['wojewodztwo']).mean()
+        dataframe = dataframe.reset_index(level=['wojewodztwo'])
+        plt.figure(figsize=(12, 8))
+        try:
+            ax = sns.scatterplot(data=dataframe, x='liczba_przypadkow',
+                                 y=dataframe['liczba_testow_z_wynikiem_negatywnym'] + dataframe[
+                                     'liczba_testow_z_wynikiem_pozytywnym'], hue='wojewodztwo')
+        except ValueError:
+            raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
+        sns.move_legend(ax, "upper left")
+        chart = 'Scatter'
+        ax.set_xlabel('Liczba przypadków', fontsize=15)
+        ax.set_ylabel('Liczba wszystkich testów', fontsize=15)
+        ax.set_title(chart, fontsize=20)
+        chart = chart + '.png'
+        if os.path.isfile(chart):
+            os.remove(chart)
+        fig = ax.get_figure()
+        fig.savefig(chart)
+        return FileResponse(chart)
+    elif data_source in dict.keys():
+        dataframe = dict.get(data_source)
+    else:
+        raise HTTPException(status_code=404, detail='Please, select correctly data source')
+    if not chart_name:
+        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+    chart = chart_name + '.png'
+    if os.path.isfile(chart):
+        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+    dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
+    plt.figure(figsize=(12, 8))
+    try:
+        ax = sns.scatterplot(data=dataframe, **params.dict())
+    except ValueError:
+        print(params)
+        raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
+    if xlabel:
+        ax.set_xlabel(xlabel, fontsize=15)
+    if ylabel:
+        ax.set_ylabel(ylabel, fontsize=15)
     fig = ax.get_figure()
-    chart = 'scatter.png'
     fig.savefig(chart)
     # print(chart)
     return FileResponse(chart)
 
 
 @app_provider.post('/jointplot')
-async def jointplot():
-    return ':)'
+async def jointplot(*, params: JointPlot, columns: list = Query([]), conditions: list = Query([]),
+                    data_source: Optional[str] = None, chart_name: Optional[str] = None):
+    if not data_source:
+        dataframe = province_full_data
+        dataframe['log_liczba_przypakdow'] = np.log(dataframe['liczba_przypadkow'])
+        dataframe['log_zgony'] = np.log(dataframe['zgony_w_wyniku_covid_i_chorob_wspolistniejacych'] + dataframe[
+            'zgony_w_wyniku_covid_bez_chorob_wspolistniejacych'])
+        try:
+            sns.jointplot(data=dataframe, x='log_liczba_przypakdow', y='log_zgony', kind='hist')
+        except ValueError:
+            raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
+        chart = 'JointPlot'
+        chart = chart + '.png'
+        if os.path.isfile(chart):
+            os.remove(chart)
+        plt.savefig(chart)
+        return FileResponse(chart)
+    elif data_source in dict.keys():
+        dataframe = dict.get(data_source)
+    else:
+        raise HTTPException(status_code=404, detail='Please, select correctly data source')
+    if not chart_name:
+        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+    chart = chart_name + '.png'
+    if os.path.isfile(chart):
+        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+    dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
+    try:
+        sns.jointplot(data=dataframe, **params.dict())
+    except ValueError:
+        print(params)
+        raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
+    plt.savefig(chart)
+    return FileResponse(chart)
 
 
 @app_provider.post('/heatmap')
 async def heatmap():
+    return ':)'
+
+
+@app_provider.post('/catplot')
+async def catplot():
+    dataframe = province_full_data
+    g = sns.catplot(data=dataframe, x='stan_rekordu_na', y='liczba_przypadkow', col='wojewodztwo',
+                    col_wrap=4)
+    # min_date = dataframe['stan_rekordu_na'].min()
+    # max_date = dataframe['stan_rekordu_na'].max()
+    # auto_scaler_date(min_date=min_date, max_date=max_date, ax=ax)
+    # fig = ax.get_figure()
+    # plt.xticks(rotation=30)
+    for ax in g.axes.flat:
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(24))
+        # print(labels)
+    #     for i, l in enumerate(labels):
+    #         if i % 60 == 0:
+    #             labels[i] = ''
+    #     ax.set_xticklabels(labels, rotation=30)
+    # g.set(xticks=dataframe['stan_rekordu_na'][2::60])
+    chart = 'CatPlot'
+    chart = chart + '.png'
+    if os.path.isfile(chart):
+        os.remove(chart)
+    plt.savefig(chart)
+    return FileResponse(chart)
+
+
+@app_provider.post('/relplot')
+async def relplot():
     return ':)'
 
 
@@ -292,6 +384,7 @@ async def pca(*, columns: list = Query([]), conditions: list = Query([]),
     #     pca_method(chart_name=chart_name, dataframe=dataframe, columns_for_pca=columns, column_filter=filter,
     #                n_components=2)
     #     return FileResponse(chart)
+
     return ':)'
 
 
