@@ -5,14 +5,14 @@ import logging
 
 from http.client import HTTPException
 import re
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends
 
 import urllib.request
 import os
 import pandas as pd
 from matplotlib import ticker
 from fastapi.responses import FileResponse
-from typing import Optional
+from typing import Optional, Dict, List
 from .schemas.seaborn_schema import LinePlot, BoxPlot, HistPlot, ScatterPlot, JointPlot, RelPlot
 
 from .polish_data import get_district_stats_data, get_district_vacc_data, get_province_full
@@ -57,6 +57,42 @@ async def get_columns(dataframe: str):
         return list(dataframe.columns)
     else:
         raise HTTPException(status_code=404, detail='Dataframe not found')
+
+
+def agg_dict(aggfunc: List[str] = Query([])):
+    return list(map(json.loads, aggfunc))
+
+
+@app_provider.get('/pivot')
+async def get_pivot(*, columns: list = Query([]), conditions: list = Query([]), data_source: Optional[str] = None,
+                    values: list = Query([]), index: list = Query([]), pivot_columns: list = Query([]),
+                    agg_func: list = Depends(agg_dict)):
+    if not data_source:
+        # print(agg_func[0].items())
+        for k, v in agg_func[0].items():
+            print(k, v)
+        dataframe = df_small
+        dataframe = dataframe[dataframe['date'].isin(dataframe['date'].sample(10))]
+        dataframe = dataframe[dataframe['location'].isin(dataframe['location'].sample(10))]
+        pivo = pd.pivot_table(dataframe, values=['total_cases'], index=['location'], columns=['date'])
+        result = pivo.to_json(date_format='iso')
+        return json.loads(result)
+    elif data_source in dict.keys():
+        dataframe = dict.get(data_source)
+    else:
+        raise HTTPException(status_code=404, detail='Please, select correctly data source')
+    dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
+    agg = {}
+    for idx, part in enumerate(agg_func):
+        for k, v in agg_func[idx].items():
+            if v == 'sum':
+                agg[k] = np.sum
+            elif v == 'mean':
+                agg[k] = np.mean
+    pivo = pd.pivot_table(dataframe, values=values, index=index, columns=pivot_columns, aggfunc=agg)
+    result = pivo.to_json(date_format='iso')
+
+    return json.loads(result)
 
 
 @app_provider.post('/lineplot', summary="Create lineplot for selected data")
@@ -378,7 +414,6 @@ async def pca(*, columns: list = Query([]), conditions: list = Query([]),
 @app_provider.post('/mds')
 async def mds(*, columns: list = Query([]), conditions: list = Query([]),
               data_source: Optional[str] = None, chart_name: Optional[str] = None, filter: Optional[str] = None):
-
     if not data_source:
         dataframe = province_full_data
         #     dataframe = dataframe[dataframe['location'].isin(
@@ -391,7 +426,10 @@ async def mds(*, columns: list = Query([]), conditions: list = Query([]),
                    'liczba_osob_objetych_kwarantanna', 'liczba_wykonanych_testow',
                    'liczba_testow_z_wynikiem_pozytywnym', 'liczba_testow_z_wynikiem_negatywnym']
         filter = 'wojewodztwo'
-        mds_method(dataframe=dataframe, column_filter=filter, columns_for_pca=columns)
+        chart = 'mds.png'
+        mds_method(chart_name=chart, dataframe=dataframe, column_filter=filter, columns_for_pca=columns)
+        return FileResponse(chart)
+
 
 # from .database import engine, Base
 # Base.metadata.create_all(engine)

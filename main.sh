@@ -25,6 +25,12 @@ provider_restart() {
   provider_up
 }
 
+provider_fast() {
+  provider_stop
+  provider_up
+}
+
+
 main() {
   $1_$2
 }
