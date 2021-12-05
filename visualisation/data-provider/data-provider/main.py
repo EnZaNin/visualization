@@ -17,7 +17,7 @@ from .schemas.seaborn_schema import LinePlot, BoxPlot, HistPlot, ScatterPlot, Jo
 
 from .polish_data import get_district_stats_data, get_district_vacc_data, get_province_full
 from .owid_data import get_owid_full, get_owid_small
-from .methods import get_filtered_data, auto_scaler_date, pca_method
+from .methods import get_filtered_data, auto_scaler_date, pca_method, mds_method
 
 pd.options.mode.chained_assignment = None  # default='warn'
 
@@ -38,10 +38,6 @@ dict_owid = {'owid_full': df, 'owid_small': df_small}
 dict_polish = {'district_stats': district_stats_data, 'district_vacc': district_vacc_data,
                'prov_data': province_full_data}
 dict = {**dict_owid, **dict_polish}
-
-
-
-
 
 app_provider = FastAPI(title="CovidEDA",
                        # description=description,
@@ -241,7 +237,6 @@ def scatterplot(*, params: ScatterPlot, columns: list = Query([]), conditions: l
     try:
         ax = sns.scatterplot(data=dataframe, **params.dict())
     except ValueError:
-        print(params)
         raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
     if xlabel:
         ax.set_xlabel(xlabel, fontsize=15)
@@ -326,24 +321,77 @@ async def relplot(*, params: RelPlot, columns: list = Query([]), conditions: lis
     return FileResponse(chart)
 
 
+@app_provider.get('/scattermatrix')
+async def scatter_matrix(*, params: ScatterPlot, columns: list = Query([]), conditions: list = Query([]),
+                         data_source: Optional[str] = None, chart_name: Optional[str] = None):
+    if not data_source:
+        dataframe = province_full_data
+        dataframe = dataframe[['liczba_przypadkow', 'zgony_w_wyniku_covid_bez_chorob_wspolistniejacych',
+                               'zgony_w_wyniku_covid_i_chorob_wspolistniejacych', 'liczba_ozdrowiencow',
+                               'liczba_osob_objetych_kwarantanna', 'liczba_wykonanych_testow', 'wojewodztwo']]
+        sns.pairplot(dataframe, hue='wojewodztwo')
+        chart = 'scattermatrix.png'
+        plt.savefig(chart)
+        return FileResponse(chart)
+    elif data_source in dict.keys():
+        dataframe = dict.get(data_source)
+    else:
+        raise HTTPException(status_code=404, detail='Please, select correctly data source')
+    if not chart_name:
+        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+    chart = chart_name + '.png'
+    if os.path.isfile(chart):
+        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+    dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
+    plt.figure(figsize=(12, 8))
+    try:
+        sns.pairplot(data=dataframe, **params.dict())
+    except ValueError:
+        raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
+    plt.savefig(chart)
+    return FileResponse(chart)
+
+
 @app_provider.post('/pca')
 async def pca(*, columns: list = Query([]), conditions: list = Query([]),
               data_source: Optional[str] = None, chart_name: Optional[str] = None, filter: Optional[str] = None):
-    # if not data_source:
-    #     dataframe = df_small
-    #     dataframe = dataframe[dataframe['location'].isin(
-    #         ['Poland', 'Germany', 'Italy', 'Czechia', 'Russia', 'Slovakia', 'Ukraine', 'France'])]
-    #     columns = ['total_cases', 'new_cases', 'total_deaths', 'new_deaths',
-    #                'total_tests', 'new_tests', 'total_vaccinations',
-    #                'people_vaccinated', 'people_fully_vaccinated', 'total_boosters', 'new_vaccinations']
-    #     filter = 'location'
-    #     chart_name = '2D_pca'
-    #     pca_method(chart_name=chart_name, dataframe=dataframe, columns_for_pca=columns, column_filter=filter,
-    #                n_components=2)
-    #     return FileResponse(chart)
+    if not data_source:
+        dataframe = province_full_data
+        #     dataframe = dataframe[dataframe['location'].isin(
+        #         ['Poland', 'Germany', 'Italy', 'Czechia', 'Russia', 'Slovakia', 'Ukraine', 'France'])]
+        #     columns = ['total_cases', 'new_cases', 'total_deaths', 'new_deaths',
+        #                'total_tests', 'new_tests', 'total_vaccinations',
+        #                'people_vaccinated', 'people_fully_vaccinated', 'total_boosters', 'new_vaccinations']
+        columns = ['liczba_przypadkow', 'zgony_w_wyniku_covid_bez_chorob_wspolistniejacych',
+                   'zgony_w_wyniku_covid_i_chorob_wspolistniejacych', 'liczba_zlecen_poz', 'liczba_ozdrowiencow',
+                   'liczba_osob_objetych_kwarantanna', 'liczba_wykonanych_testow',
+                   'liczba_testow_z_wynikiem_pozytywnym', 'liczba_testow_z_wynikiem_negatywnym']
+        filter = 'wojewodztwo'
+        chart_name = f'From {len(columns)}'
+        chart = pca_method(chart_name=chart_name, dataframe=dataframe, columns_for_pca=columns, column_filter=filter,
+                           n_components=2)
+        return FileResponse(chart)
+    #
+    # return ':)'
 
-    return ':)'
 
+@app_provider.post('/mds')
+async def mds(*, columns: list = Query([]), conditions: list = Query([]),
+              data_source: Optional[str] = None, chart_name: Optional[str] = None, filter: Optional[str] = None):
+
+    if not data_source:
+        dataframe = province_full_data
+        #     dataframe = dataframe[dataframe['location'].isin(
+        #         ['Poland', 'Germany', 'Italy', 'Czechia', 'Russia', 'Slovakia', 'Ukraine', 'France'])]
+        #     columns = ['total_cases', 'new_cases', 'total_deaths', 'new_deaths',
+        #                'total_tests', 'new_tests', 'total_vaccinations',
+        #                'people_vaccinated', 'people_fully_vaccinated', 'total_boosters', 'new_vaccinations']
+        columns = ['liczba_przypadkow', 'zgony_w_wyniku_covid_bez_chorob_wspolistniejacych',
+                   'zgony_w_wyniku_covid_i_chorob_wspolistniejacych', 'liczba_zlecen_poz', 'liczba_ozdrowiencow',
+                   'liczba_osob_objetych_kwarantanna', 'liczba_wykonanych_testow',
+                   'liczba_testow_z_wynikiem_pozytywnym', 'liczba_testow_z_wynikiem_negatywnym']
+        filter = 'wojewodztwo'
+        mds_method(dataframe=dataframe, column_filter=filter, columns_for_pca=columns)
 
 # from .database import engine, Base
 # Base.metadata.create_all(engine)
@@ -396,4 +444,3 @@ def get_dataframe(dataframe: str, orient: Optional[str] = None):
 
 # if not inspector.has_table(engine, 'poland_vacc'):
 # df_szcza.to_sql('poland_vacc', con=engine, if_exists='replace', index=False)
-

@@ -85,3 +85,9 @@ class RelPlot(BaseModel):
     kind = 'scatter'
     height: Optional[int] = 5
     aspect: Optional[int] = 1
+
+
+class PairPlot(BaseModel):
+    hue: Optional[str] = None
+    kind: Optional[str] = 'scatter'
+    diag_kind: Optional[str] = 'auto'
