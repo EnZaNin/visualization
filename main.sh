@@ -19,13 +19,13 @@ provider_stop() {
   docker-compose -f $docker_compose_provider down
 }
 
-provider_restart() {
+provider_reset() {
   clear_all
   provider_build
   provider_up
 }
 
-provider_fast() {
+provider_restart() {
   provider_stop
   provider_up
 }

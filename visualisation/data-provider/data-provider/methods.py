@@ -97,26 +97,18 @@ def auto_scaler_date(min_date: dt, max_date: dt, ax):
     if days_in_chart >= 365 * 2:
         major_locator = mdates.YearLocator()
         minor_locator = mdates.MonthLocator()
-        # majorFormatter = mdates.DateFormatter('%m/%d/%Y')
 
     elif days_in_chart >= 365:
         major_locator = mdates.MonthLocator()
         minor_locator = mdates.WeekdayLocator()
-        # majorFormatter = mdates.DateFormatter('%m/%d/%Y')
     elif days_in_chart < 30:
         major_locator = mdates.DayLocator()
         minor_locator = mdates.DayLocator()
-        # majorFormatter = mdates.DateFormatter('%m/%d/%Y')
     else:
         major_locator = mdates.WeekdayLocator()
         minor_locator = mdates.DayLocator()
-        # majorFormatter = mdates.DateFormatter('%m/%d/%Y')
     ax.xaxis.set_major_locator(major_locator)
-    # ax.xaxis.set_major_formatter(majorFormatter)
     ax.xaxis.set_minor_locator(minor_locator)
-    # ax.xaxis.set_minor_formatter(daysFmt)
-    # ax.set_xlim(min_date, max_date)
-    # return ax
 
 
 def pca_method(chart_name, dataframe, columns_for_pca, column_filter, n_components):

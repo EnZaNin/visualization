@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException, Query, Depends
 import urllib.request
 import os
 import pandas as pd
+import json
 from matplotlib import ticker
 from fastapi.responses import FileResponse
 from typing import Optional, Dict, List
@@ -50,6 +51,17 @@ app_provider = FastAPI(title="CovidEDA",
                        }, )
 
 
+@app_provider.get('/dataframe')
+async def get_sample_from_dataframe(dataframe: str, orient: Optional[str] = None):
+    if dataframe in dict.keys():
+        dfr = dict.get(dataframe)
+        dfr = dfr.sample(10).T
+        result = dfr.to_json(orient=orient, date_format='iso')
+        return json.loads(result)
+    else:
+        raise HTTPException(status_code=404, detail='Wrong name')
+
+
 @app_provider.get('/df/{dataframe}')
 async def get_columns(dataframe: str):
     if dataframe in dict.keys():
@@ -57,6 +69,27 @@ async def get_columns(dataframe: str):
         return list(dataframe.columns)
     else:
         raise HTTPException(status_code=404, detail='Dataframe not found')
+
+
+@app_provider.get('/stats')
+async def get_basics_stats(*, data_source: str, columns: list = Query([]), conditions: list = Query([])):
+    if not data_source:
+        dfr = dict.get(data_source)
+        dfr_stats = dfr.describe().T
+        dfr_stats['missing'] = dfr.isnull().sum()
+        result = dfr_stats.T.to_json(date_format='iso')
+        return json.loads(result)
+    elif data_source in dict.keys():
+        dataframe = dict.get(data_source)
+    else:
+        raise HTTPException(status_code=404, detail='Dataframe not found')
+    dfr_stats_filtered = get_filtered_data(df=dataframe, columns=columns, query=conditions)
+    dfr_stats = dfr_stats_filtered.describe().T
+    dfr_stats['missing'] = dfr_stats_filtered.isnull().sum()
+    # dfr_stats = dfr_stats.apply(np.ceil)
+    dfr_stats = dfr_stats.apply(lambda x: round(x, 2))
+    result = dfr_stats.T.to_json(date_format='iso')
+    return json.loads(result)
 
 
 def agg_dict(aggfunc: List[str] = Query([])):
@@ -68,7 +101,6 @@ async def get_pivot(*, columns: list = Query([]), conditions: list = Query([]), 
                     values: list = Query([]), index: list = Query([]), pivot_columns: list = Query([]),
                     agg_func: list = Depends(agg_dict)):
     if not data_source:
-        # print(agg_func[0].items())
         for k, v in agg_func[0].items():
             print(k, v)
         dataframe = df_small
@@ -93,6 +125,24 @@ async def get_pivot(*, columns: list = Query([]), conditions: list = Query([]), 
     result = pivo.to_json(date_format='iso')
 
     return json.loads(result)
+
+
+@app_provider.get('/charts')
+async def get_name_all_created_charts():
+    files = os.listdir()
+    chart_list = []
+    for file in files:
+        if file.endswith('.png'):
+            chart_list.append(file)
+    return chart_list
+
+
+@app_provider.get('/chart/{chart_name}')
+async def get_chart_by_name(chart_name: str):
+    chart = chart_name + '.png'
+    if not os.path.isfile(chart):
+        raise HTTPException(status_code=404, detail='Chart with that name does not exist')
+    return FileResponse(chart)
 
 
 @app_provider.post('/lineplot', summary="Create lineplot for selected data")
@@ -357,7 +407,7 @@ async def relplot(*, params: RelPlot, columns: list = Query([]), conditions: lis
     return FileResponse(chart)
 
 
-@app_provider.get('/scattermatrix')
+@app_provider.post('/scattermatrix')
 async def scatter_matrix(*, params: ScatterPlot, columns: list = Query([]), conditions: list = Query([]),
                          data_source: Optional[str] = None, chart_name: Optional[str] = None):
     if not data_source:
@@ -459,26 +509,3 @@ async def mds(*, columns: list = Query([]), conditions: list = Query([]),
 
 # df = pd.read_sql_query(f''' {condition} ''', engine)
 # return df
-import json
-
-
-@app_provider.get('/chart/{chart_name}')
-def get_chart_by_name(chart_name: str):
-    chart = chart_name + '.png'
-    if not os.path.isfile(chart):
-        raise HTTPException(status_code=404, detail='Chart with that name does not exist')
-    return FileResponse(chart)
-
-
-@app_provider.get('/dataframe')
-def get_dataframe(dataframe: str, orient: Optional[str] = None):
-    if dataframe in dict.keys():
-        df = dict.get(dataframe)
-        df = df.sample(10)
-        result = df.to_json(orient=orient, date_format='iso')
-        return json.loads(result)
-    else:
-        raise HTTPException(status_code=404, detail='Wrong name')
-
-# if not inspector.has_table(engine, 'poland_vacc'):
-# df_szcza.to_sql('poland_vacc', con=engine, if_exists='replace', index=False)
