@@ -15,11 +15,21 @@ clear_all() {
   docker rm $(docker ps -a -q)
 }
 
-provider_restart() {
+provider_stop() {
+  docker-compose -f $docker_compose_provider down
+}
+
+provider_reset() {
   clear_all
   provider_build
   provider_up
 }
+
+provider_restart() {
+  provider_stop
+  provider_up
+}
+
 
 main() {
   $1_$2
