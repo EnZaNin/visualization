@@ -14,7 +14,7 @@ import json
 from matplotlib import ticker
 from fastapi.responses import FileResponse
 from typing import Optional, Dict, List
-from .schemas.seaborn_schema import LinePlot, BoxPlot, HistPlot, ScatterPlot, JointPlot, RelPlot
+from .schemas.seaborn_schema import LinePlot, BoxPlot, HistPlot, ScatterPlot, JointPlot, RelPlot, CatPlot
 
 from .polish_data import get_district_stats_data, get_district_vacc_data, get_province_full
 from .owid_data import get_owid_full, get_owid_small
@@ -34,14 +34,33 @@ df_small = get_owid_small()
 district_stats_data = get_district_stats_data()
 district_vacc_data = get_district_vacc_data()
 province_full_data = get_province_full()
+df_small['date'] = df_small['date'].astype('datetime64[ns]')
 
 dict_owid = {'owid_full': df, 'owid_small': df_small}
 dict_polish = {'district_stats': district_stats_data, 'district_vacc': district_vacc_data,
                'prov_data': province_full_data}
 dict = {**dict_owid, **dict_polish}
 
+description = """
+
+CovidEDA is a tool for exploratory data analysis.
+
+Is build on top of Pandas and Seaborn.
+
+Examples of necessary quotes:
+
+    * For parameter "columns" - columns is list of selected from DataFrame columns
+        e.g. type here column name without ' ' -> date     
+    * For parameter "conditions" - type here simple query to filter DataFrame
+        e.g. select rows where location is Poland -> dataframe['location'] == 'Poland'
+        e.g. select rows where location is Poland or Germany -> dataframe['location'].isin(['Poland', 'Germany'])
+        e.g. select rows where date is more than 2020-05-23 -> dataframe['date_column'] > pd.to_datetime('2020-05-23')
+        supported type: >=, >, ==, <, <=
+    And that is what you need to do with data!
+"""
+
 app_provider = FastAPI(title="CovidEDA",
-                       # description=description,
+                       description=description,
                        # version="0.0.1",
                        # terms_of_service="http://example.com/terms/",
                        contact={
@@ -53,6 +72,13 @@ app_provider = FastAPI(title="CovidEDA",
 
 @app_provider.get('/dataframe')
 async def get_sample_from_dataframe(dataframe: str, orient: Optional[str] = None):
+    """
+    Get a random sample from DataFrame
+
+    This will let the API user get a small table of data
+    * Select data source
+    * Returning data to you with json format, so you can select orient
+    """
     if dataframe in dict.keys():
         dfr = dict.get(dataframe)
         dfr = dfr.sample(10).T
@@ -64,6 +90,11 @@ async def get_sample_from_dataframe(dataframe: str, orient: Optional[str] = None
 
 @app_provider.get('/df/{dataframe}')
 async def get_columns(dataframe: str):
+    """
+    Get columns from DataFrame
+    * Select data source
+    * Return a list of columns
+    """
     if dataframe in dict.keys():
         dataframe = dict.get(dataframe)
         return list(dataframe.columns)
@@ -72,7 +103,14 @@ async def get_columns(dataframe: str):
 
 
 @app_provider.get('/stats')
-async def get_basics_stats(*, data_source: str, columns: list = Query([]), conditions: list = Query([])):
+async def get_summary_statistics(*, data_source: str, columns: list = Query([]), conditions: list = Query([])):
+    """
+    Get summary statistics from DataFrame
+    * Select data source
+    * If you want, you can select smaller DataFrame:
+        - Columns - list of columns which be selected in returned DataFrame
+        - Conditions - special query for selected DataFrame
+    """
     if not data_source:
         dfr = dict.get(data_source)
         dfr_stats = dfr.describe().T
@@ -86,10 +124,43 @@ async def get_basics_stats(*, data_source: str, columns: list = Query([]), condi
     dfr_stats_filtered = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     dfr_stats = dfr_stats_filtered.describe().T
     dfr_stats['missing'] = dfr_stats_filtered.isnull().sum()
-    # dfr_stats = dfr_stats.apply(np.ceil)
-    dfr_stats = dfr_stats.apply(lambda x: round(x, 2))
+    # dfr_stats['dtype'] = dfr_stats_filtered.dtypes
+    # print(dfr_stats['dtype'])
+    # print(dfr_stats_filtered.dtypes)
+    # dfr_stats = dfr_stats.apply(lambda x: round(x, 2))
     result = dfr_stats.T.to_json(date_format='iso')
     return json.loads(result)
+
+
+@app_provider.get('/lastday')
+async def get_stats_for_last_day(data_source: str):
+    if data_source in dict.keys():
+        dataframe = dict.get(data_source)
+    else:
+        raise HTTPException(status_code=404, detail='Dataframe not found')
+    if 'date' in list(dataframe.columns):
+        # print(pd.unique(dataframe['date']))
+        date = pd.unique(dataframe['date'])
+        date.sort()
+        date_key = date[-1]
+        dataframe = dataframe[dataframe['date'] == date_key]
+        # print(dataframe)
+        dfr_stats = dataframe.describe().T
+        dfr_stats['missing'] = dataframe.isnull().sum()
+        dfr_stats = dfr_stats.apply(lambda x: round(x, 2))
+        result = dfr_stats.T.to_json(date_format='iso')
+        return json.loads(result)
+    elif 'stan_rekordu_na' in list(dataframe.columns):
+        date = pd.unique(dataframe['stan_rekordu_na'])
+        date.sort()
+        date_key = date[-1]
+        dataframe = dataframe[dataframe['stan_rekordu_na'] == date_key]
+        # print(dataframe)
+        dfr_stats = dataframe.describe().T
+        dfr_stats['missing'] = dataframe.isnull().sum()
+        dfr_stats = dfr_stats.apply(lambda x: round(x, 2))
+        result = dfr_stats.T.to_json(date_format='iso')
+        return json.loads(result)
 
 
 def agg_dict(aggfunc: List[str] = Query([])):
@@ -145,6 +216,14 @@ async def get_chart_by_name(chart_name: str):
     return FileResponse(chart)
 
 
+@app_provider.put('/update')
+async def update_data_manually():
+    os.remove('owid_data.csv')
+    os.remove('szczepienia.csv')
+    os.remove('gov_data.csv')
+    os.remove('province_full.csv')
+
+
 @app_provider.post('/lineplot', summary="Create lineplot for selected data")
 async def lineplot(*, parameters: LinePlot, columns: list = Query([]), conditions: list = Query([]),
                    data_source: Optional[str] = None, chart_name: Optional[str] = None):
@@ -179,7 +258,7 @@ async def lineplot(*, parameters: LinePlot, columns: list = Query([]), condition
         raise HTTPException(status_code=404, detail='Chart with that name already exist')
     try:
         ax = sns.lineplot(data=dataframe, **parameters.dict())
-    except ValueError:
+    except ValueError or AttributeError:
         raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
     if parameters.x == 'date':
         min_date = dataframe['date'].min()
@@ -201,12 +280,12 @@ async def boxplot(*, params: BoxPlot, columns: list = Query([]), conditions: lis
         dataframe = province_full_data
         ax = sns.boxplot(data=dataframe, x='liczba_przypadkow', y='wojewodztwo', orient='h')
         chart = 'Wykres pudełkowy dla województw'
-        ax.set_xlabel('Województwa', fontsize=15)
-        ax.set_ylabel('Liczba przypadków', fontsize=15)
+        ax.set_xlabel('Liczba przypadków', fontsize=15)
+        ax.set_ylabel('Województwa', fontsize=15)
         ax.set_title(chart, fontsize=20)
         chart = chart + '.png'
         fig = ax.get_figure()
-        plt.figure(figsize=(24, 13.5), dpi=80)
+        plt.figure(figsize=(16, 8))
         fig.savefig(chart)
         return FileResponse(chart)
     elif data_source in dict.keys():
@@ -225,7 +304,7 @@ async def boxplot(*, params: BoxPlot, columns: list = Query([]), conditions: lis
         ax = sns.boxplot(data=dataframe, **params.dict())
         if add_points:
             sns.stripplot(data=dataframe, **params.dict(), size=4, color=".3", linewidth=0)
-    except ValueError:
+    except ValueError or AttributeError:
         raise HTTPException(status_code=404, detail='Ups, something was wrong, check your parameters')
     if xlabel:
         ax.set_xlabel(xlabel, fontsize=15)
@@ -271,7 +350,7 @@ async def histplot(*, params: HistPlot, columns: list = Query([]), conditions: l
     plt.figure(figsize=(24, 13.5), dpi=80)
     try:
         ax = sns.histplot(data=dataframe, **params.dict())
-    except ValueError:
+    except ValueError or AttributeError:
         raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
     if xlabel:
         ax.set_xlabel(xlabel, fontsize=15)
@@ -283,9 +362,9 @@ async def histplot(*, params: HistPlot, columns: list = Query([]), conditions: l
 
 
 @app_provider.post('/scatterplot')
-def scatterplot(*, params: ScatterPlot, columns: list = Query([]), conditions: list = Query([]),
-                data_source: Optional[str] = None, chart_name: Optional[str] = None, xlabel: Optional[str] = None,
-                ylabel: Optional[str] = None):
+async def scatterplot(*, params: ScatterPlot, columns: list = Query([]), conditions: list = Query([]),
+                      data_source: Optional[str] = None, chart_name: Optional[str] = None, xlabel: Optional[str] = None,
+                      ylabel: Optional[str] = None):
     if not data_source:
         dataframe = province_full_data
         dataframe = dataframe[dataframe['stan_rekordu_na'].isin(dataframe.tail(7)['stan_rekordu_na'])]
@@ -322,7 +401,7 @@ def scatterplot(*, params: ScatterPlot, columns: list = Query([]), conditions: l
     plt.figure(figsize=(12, 8))
     try:
         ax = sns.scatterplot(data=dataframe, **params.dict())
-    except ValueError:
+    except ValueError or AttributeError:
         raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
     if xlabel:
         ax.set_xlabel(xlabel, fontsize=15)
@@ -363,25 +442,56 @@ async def jointplot(*, params: JointPlot, columns: list = Query([]), conditions:
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     try:
         sns.jointplot(data=dataframe, **params.dict())
-    except ValueError:
-        print(params)
+    except ValueError or AttributeError:
         raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
     plt.savefig(chart)
     return FileResponse(chart)
 
 
 @app_provider.post('/catplot')
-async def catplot():
-    dataframe = province_full_data
-    g = sns.catplot(data=dataframe, x='stan_rekordu_na', y='liczba_przypadkow', col='wojewodztwo',
-                    col_wrap=4)
-    for ax in g.axes.flat:
-        ax.xaxis.set_major_locator(ticker.MultipleLocator(24))
-        ax.set_xticklabels(rotation=30)
-    chart = 'CatPlot'
-    chart = chart + '.png'
+async def catplot(*, params: CatPlot, columns: list = Query([]), conditions: list = Query([]),
+                  data_source: Optional[str] = None, chart_name: Optional[str] = None):
+    if not data_source:
+        dataframe = province_full_data
+        g = sns.catplot(data=dataframe, x='stan_rekordu_na', y='liczba_przypadkow', col='wojewodztwo',
+                        col_wrap=4)
+        # for ax in g.axes.flat:
+        #     ax.xaxis.set_major_locator(ticker.MultipleLocator(24))
+        #     ax.set_xticklabels(ax.get_xticklabels(), rotation=30)
+        min_date = dataframe['stan_rekordu_na'].min()
+        max_date = dataframe['stan_rekordu_na'].max()
+        print(min_date, max_date)
+        ax2 = g.axes[0].twiny()
+        auto_scaler_date(min_date=min_date, max_date=max_date, ax=ax2)
+        chart = 'CatPlot'
+        chart = chart + '.png'
+        if os.path.isfile(chart):
+            os.remove(chart)
+        plt.savefig(chart)
+        return FileResponse(chart)
+    elif data_source in dict.keys():
+        dataframe = dict.get(data_source)
+    else:
+        raise HTTPException(status_code=404, detail='Please, select correctly data source')
+    if not chart_name:
+        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+    chart = chart_name + '.png'
     if os.path.isfile(chart):
-        os.remove(chart)
+        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+    dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
+    try:
+        g = sns.catplot(data=dataframe, **params.dict())
+        if params.x == 'stan_rekordu_na' or params.x == 'date':
+            min_date = dataframe['stan_rekordu_na'].min()
+            max_date = dataframe['stan_rekordu_na'].max()
+            print(min_date, max_date)
+            # for ax in g.axes.flat:
+            #     ax.xaxis.set_major_locator(ticker.MultipleLocator(24))
+            #     ax.set_xticklabels(ax.get_xticklabels(), rotation=30)
+            ax2 = g.axes[0].twiny()
+            auto_scaler_date(min_date=min_date, max_date=max_date, ax=ax2)
+    except ValueError or AttributeError:
+        raise HTTPException(status_code=404, detail='Ups, something was wrong, check your parameters')
     plt.savefig(chart)
     return FileResponse(chart)
 
@@ -401,7 +511,7 @@ async def relplot(*, params: RelPlot, columns: list = Query([]), conditions: lis
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     try:
         sns.relplot(data=dataframe, **params.dict())
-    except ValueError:
+    except ValueError or AttributeError:
         raise HTTPException(status_code=404, detail='Ups, something was wrong, check your parameters')
     plt.savefig(chart)
     return FileResponse(chart)
@@ -432,54 +542,83 @@ async def scatter_matrix(*, params: ScatterPlot, columns: list = Query([]), cond
     plt.figure(figsize=(12, 8))
     try:
         sns.pairplot(data=dataframe, **params.dict())
-    except ValueError:
+    except ValueError or AttributeError:
         raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
     plt.savefig(chart)
     return FileResponse(chart)
 
 
 @app_provider.post('/pca')
-async def pca(*, columns: list = Query([]), conditions: list = Query([]),
-              data_source: Optional[str] = None, chart_name: Optional[str] = None, filter: Optional[str] = None):
+async def pca(*, columns: list = Query([]), conditions: list = Query([]), columns_for_pca: list = Query([]),
+              data_source: Optional[str] = None, chart_name: Optional[str] = None, column_filter: Optional[str] = None):
     if not data_source:
         dataframe = province_full_data
-        #     dataframe = dataframe[dataframe['location'].isin(
-        #         ['Poland', 'Germany', 'Italy', 'Czechia', 'Russia', 'Slovakia', 'Ukraine', 'France'])]
-        #     columns = ['total_cases', 'new_cases', 'total_deaths', 'new_deaths',
-        #                'total_tests', 'new_tests', 'total_vaccinations',
-        #                'people_vaccinated', 'people_fully_vaccinated', 'total_boosters', 'new_vaccinations']
         columns = ['liczba_przypadkow', 'zgony_w_wyniku_covid_bez_chorob_wspolistniejacych',
                    'zgony_w_wyniku_covid_i_chorob_wspolistniejacych', 'liczba_zlecen_poz', 'liczba_ozdrowiencow',
                    'liczba_osob_objetych_kwarantanna', 'liczba_wykonanych_testow',
                    'liczba_testow_z_wynikiem_pozytywnym', 'liczba_testow_z_wynikiem_negatywnym']
-        filter = 'wojewodztwo'
-        chart_name = f'From {len(columns)}'
-        chart = pca_method(chart_name=chart_name, dataframe=dataframe, columns_for_pca=columns, column_filter=filter,
-                           n_components=2)
+        column_filter = 'wojewodztwo'
+        chart_name = 'PCA'
+        chart = pca_method(chart_name=chart_name, dataframe=dataframe, columns_for_pca=columns,
+                           column_filter=column_filter, n_components=2)
         return FileResponse(chart)
-    #
-    # return ':)'
+    elif data_source in dict.keys():
+        dataframe = dict.get(data_source)
+    else:
+        raise HTTPException(status_code=404, detail='Dataframe not found')
+    if not chart_name:
+        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+    chart = chart_name + '.png'
+    if os.path.isfile(chart):
+        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+    dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
+    chart = pca_method(chart_name=chart_name, dataframe=dataframe, columns_for_pca=columns_for_pca,
+                       column_filter=column_filter, n_components=2)
+    return FileResponse(chart)
 
 
 @app_provider.post('/mds')
-async def mds(*, columns: list = Query([]), conditions: list = Query([]),
-              data_source: Optional[str] = None, chart_name: Optional[str] = None, filter: Optional[str] = None):
+async def mds(*, columns: list = Query([]), conditions: list = Query([]), columns_for_mds: list = Query([]),
+              data_source: Optional[str] = None, chart_name: Optional[str] = None, column_filter: Optional[str] = None):
     if not data_source:
         dataframe = province_full_data
-        #     dataframe = dataframe[dataframe['location'].isin(
-        #         ['Poland', 'Germany', 'Italy', 'Czechia', 'Russia', 'Slovakia', 'Ukraine', 'France'])]
-        #     columns = ['total_cases', 'new_cases', 'total_deaths', 'new_deaths',
-        #                'total_tests', 'new_tests', 'total_vaccinations',
-        #                'people_vaccinated', 'people_fully_vaccinated', 'total_boosters', 'new_vaccinations']
         columns = ['liczba_przypadkow', 'zgony_w_wyniku_covid_bez_chorob_wspolistniejacych',
                    'zgony_w_wyniku_covid_i_chorob_wspolistniejacych', 'liczba_zlecen_poz', 'liczba_ozdrowiencow',
                    'liczba_osob_objetych_kwarantanna', 'liczba_wykonanych_testow',
                    'liczba_testow_z_wynikiem_pozytywnym', 'liczba_testow_z_wynikiem_negatywnym']
-        filter = 'wojewodztwo'
-        chart = 'mds.png'
-        mds_method(chart_name=chart, dataframe=dataframe, column_filter=filter, columns_for_pca=columns)
+        column_filter = 'wojewodztwo'
+        chart_name = 'MDS'
+        chart = mds_method(chart_name=chart_name, dataframe=dataframe, columns_for_mds=columns,
+                           column_filter=column_filter)
         return FileResponse(chart)
-
+    elif data_source in dict.keys():
+        dataframe = dict.get(data_source)
+    else:
+        raise HTTPException(status_code=404, detail='Dataframe not found')
+    if not chart_name:
+        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+    chart = chart_name + '.png'
+    if os.path.isfile(chart):
+        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+    dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
+    chart = mds_method(chart_name=chart_name, dataframe=dataframe, columns_for_mds=columns_for_mds,
+                       column_filter=column_filter)
+    return FileResponse(chart)
+    # if not data_source:
+    #     dataframe = province_full_data
+    #         dataframe = dataframe[dataframe['location'].isin(
+    #             ['Poland', 'Germany', 'Italy', 'Czechia', 'Russia', 'Slovakia', 'Ukraine', 'France'])]
+    #         columns = ['total_cases', 'new_cases', 'total_deaths', 'new_deaths',
+    #                    'total_tests', 'new_tests', 'total_vaccinations',
+    #                    'people_vaccinated', 'people_fully_vaccinated', 'total_boosters', 'new_vaccinations']
+    # columns = ['liczba_przypadkow', 'zgony_w_wyniku_covid_bez_chorob_wspolistniejacych',
+    #            'zgony_w_wyniku_covid_i_chorob_wspolistniejacych', 'liczba_zlecen_poz', 'liczba_ozdrowiencow',
+    #            'liczba_osob_objetych_kwarantanna', 'liczba_wykonanych_testow',
+    #            'liczba_testow_z_wynikiem_pozytywnym', 'liczba_testow_z_wynikiem_negatywnym']
+    # filter = 'wojewodztwo'
+    # chart = 'mds.png'
+    # mds_method(chart_name=chart, dataframe=dataframe, column_filter=filter, columns_for_pca=columns)
+    # return FileResponse(chart)
 
 # from .database import engine, Base
 # Base.metadata.create_all(engine)

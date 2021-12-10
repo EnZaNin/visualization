@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import datetime as dt
 from fastapi import HTTPException
+import matplotlib as mpl
 import matplotlib.dates as mdates
 from matplotlib import pyplot as plt
 import seaborn as sns
@@ -28,46 +29,6 @@ def download_file(file, url):
         logger.info(f'File {file} is already downloaded')
 
 
-def query_match(df, query, data_column):
-    dataframe = df
-
-    for param in query:
-        date_from = re.match(r'(?P<column>.*) > (?P<value>.*)', param)
-        if date_from:
-            if date_from.group('column') == 'date_from':
-                date_from_datetype = dt.datetime.strptime(date_from.group('value'), '%Y-%m-%d')
-                dataframe = dataframe[dataframe[data_column] > date_from_datetype]
-            else:
-                dataframe = dataframe[dataframe[date_from.group('column')] > int(date_from.group('value'))]
-            if dataframe.size == 0:
-                raise HTTPException(status_code=404, detail='Ups, your query is wrong (date_from)')
-
-        date_to = re.match(r'(?P<column>.*) < (?P<value>.*)', param)
-        if date_to:
-            if date_to.group('column') == 'date_to':
-                date_to_datetype = dt.datetime.strptime(date_to.group('value'), '%Y-%m-%d')
-                dataframe = dataframe[dataframe[data_column] < date_to_datetype]
-            else:
-                dataframe = dataframe[dataframe[date_to.group('column')] < int(date_to.group('value'))]
-            if dataframe.size == 0:
-                raise HTTPException(status_code=404, detail='Ups, your query is wrong (date_to)')
-
-        in_list = re.match(r'(?P<column>.*) in (?P<value>.*)', param)
-        if in_list:
-            list = in_list.group('value').split(" ")
-            dataframe = dataframe[dataframe[in_list.group('column')].isin(list)]
-            if dataframe.size == 0:
-                raise HTTPException(status_code=404, detail='Ups, your query is wrong (in)')
-
-        is_value = re.match(r'(?P<column>.*) = (?P<value>.*)', param)
-        if is_value:
-            dataframe = dataframe[dataframe[is_value.group('column')] == is_value.group('value')]
-            if dataframe.size == 0:
-                raise HTTPException(status_code=404, detail='Ups, your query is wrong (=)')
-
-    return dataframe
-
-
 def get_filtered_data(df, columns, query):
     dataframe = df
     if len(columns) != 0:
@@ -76,15 +37,15 @@ def get_filtered_data(df, columns, query):
             raise HTTPException(status_code=404, detail='Ups, your query is wrong (columns)')
     for param in query:
         dataframe = dataframe[eval(param)]
-    if dataframe.size == 0:
-        raise HTTPException(status_code=404, detail=f'Ups, your query is wrong: {param}')
+        if dataframe.size == 0:
+            raise HTTPException(status_code=404, detail=f'Ups, your query is wrong: {param}')
 
     return dataframe
 
 
 def auto_scaler_date(min_date: dt, max_date: dt, ax):
     '''
-    This function is ... from:
+    This function comes from:
     https://www.programcreek.com/python/?code=TimRivoli%2FStock-Price-Trade-Analyzer%2FStock-Price-Trade-Analyzer-master%2F_classes%2FPriceTradeAnalyzer.py
     '''
 
@@ -130,50 +91,59 @@ def pca_method(chart_name, dataframe, columns_for_pca, column_filter, n_componen
                                     columns=['principal component 1', 'principal component 2'])
         principal_df[column_filter] = df_y
         plt.clf()
-        plt.figure(figsize=(16, 8))
+        plt.figure(figsize=(10, 8))
 
-        ax = sns.scatterplot(data=principal_df, x='principal component 1', hue=column_filter, y='principal component 2')
+        ax = sns.scatterplot(data=principal_df, x='principal component 1', hue=column_filter, y='principal component 2',
+                             s=60)
+        for i, txt in enumerate(df_y):
+            ax.annotate(txt, (
+                principal_df['principal component 1'].values[i], principal_df['principal component 2'].values[i]))
         sns.move_legend(ax, "upper left", bbox_to_anchor=(1.01, 1), borderaxespad=0)
-        ax.set_xlabel(f'Principal Component 1: {pca.explained_variance_ratio_[0] * 100}', fontsize=15)
-        ax.set_ylabel(f'Principal Component 2: {pca.explained_variance_ratio_[1] * 100}', fontsize=15)
-        ax.set_title(f'{chart_name} to 2 Component PCA: {np.cumsum(pca.explained_variance_ratio_ * 100)[1]}',
-                     fontsize=20)
+        ax.set_xlabel(
+            f'Principal Component 1: '
+            f'{round(pca.explained_variance_ratio_[0] * 100, 2)}% \n of explained variance ratio in data',
+            fontsize=15)
+        ax.set_ylabel(
+            f'Principal Component 2: '
+            f'{round(pca.explained_variance_ratio_[1] * 100, 2)}% \n of explained variance ratio in data',
+            fontsize=15)
+        ax.set_title(
+            f'From {len(columns_for_pca)} to 2 Component PCA: '
+            f'{round(np.cumsum(pca.explained_variance_ratio_ * 100)[1], 2)}% of explained variance ratio'
+            f' in data - {chart_name}',
+            fontsize=20)
         chart_name = chart_name + '.png'
-        plt.savefig(chart_name)
-    return chart_name
+        ax.get_xaxis().set_minor_locator(mpl.ticker.AutoMinorLocator())
+        ax.get_yaxis().set_minor_locator(mpl.ticker.AutoMinorLocator())
+        plt.savefig(chart_name, bbox_inches='tight')
+        return chart_name
+    else:
+        raise HTTPException(status_code=404,
+                            detail=f'Sorry, for n_component = {n_components} method is yet not allowed')
 
 
-def mds_method(chart_name, dataframe, column_filter, columns_for_pca):
+def mds_method(chart_name, dataframe, column_filter, columns_for_mds):
     dataframe = dataframe.groupby([column_filter]).mean()
     dataframe = dataframe.reset_index(level=[column_filter])
-    # indexs = []
-    # for idx, row in dataframe.iterrows():
-    #     if row.isna().sum() >= 0.5 * len(columns_for_pca):
-    #         indexs.append(idx)
-    # for idx in indexs:
-    #     dataframe = dataframe.drop(index=idx)
-    df_x = dataframe.loc[:, columns_for_pca].values
+    df_x = dataframe.loc[:, columns_for_mds].values
     df_y = dataframe.loc[:, column_filter].values
     x = StandardScaler().fit_transform(df_x)
-    model2d = MDS(n_components=2)
     # x = df_x
-    X_trans = model2d.fit_transform(x)
-    print('The new shape of X: ', X_trans.shape)
-    print('No. of Iterations: ', model2d.n_iter_)
-    print('Stress: ', model2d.stress_)
-    principal_df = pd.DataFrame(data=X_trans,
-                                columns=['principal component 1', 'principal component 2'])
+    model2d = MDS(n_components=2)
+    x_trans = model2d.fit_transform(x)
+    # print('The new shape of X: ', X_trans.shape)
+    # print('No. of Iterations: ', model2d.n_iter_)
+    # print('Stress: ', model2d.stress_)
+    mds_df = pd.DataFrame(data=x_trans, columns=['Standard X', 'Standard Y'])
 
-    principal_df[column_filter] = df_y
+    mds_df[column_filter] = df_y
     plt.clf()
-    plt.figure(figsize=(16, 8))
-    print(X_trans)
-    ax = sns.scatterplot(data=principal_df, x='principal component 1', hue=column_filter, y='principal component 2')
+    plt.figure(figsize=(10, 8))
+    ax = sns.scatterplot(data=mds_df, x='Standard X', hue=column_filter, y='Standard Y', s=50)
+    ax.set_title(
+        f'The new shape of X: {x_trans.shape}, No. of Iterations: {model2d.n_iter_}, Stress: {model2d.stress_}',
+        fontsize=20)
     sns.move_legend(ax, "upper left", bbox_to_anchor=(1.01, 1), borderaxespad=0)
-    # ax.set_xlabel(f'Principal Component 1: {pca.explained_variance_ratio_[0] * 100}', fontsize=15)
-    # ax.set_ylabel(f'Principal Component 2: {pca.explained_variance_ratio_[1] * 100}', fontsize=15)
-    # ax.set_title(f'{chart_name} to 2 Component PCA: {np.cumsum(pca.explained_variance_ratio_ * 100)[1]}',
-    #              fontsize=20)
-    print(principal_df)
-    chart_name = chart_name
-    plt.savefig(chart_name)
+    chart_name = chart_name + '.png'
+    plt.savefig(chart_name, bbox_inches='tight')
+    return chart_name
