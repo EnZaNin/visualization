@@ -152,8 +152,8 @@ def get_district_vacc_data() -> DataFrame:
              'w3_zaszczepieni_pen_dawk_w_wieku_60_69': np.sum,
              'w3_zaszczepieni_pen_dawk_w_wieku_70plus': np.sum
              })
-    dfs['%_zaszczepionych'] = dfs['w1_zaszczepieni_pacjenci'] / dfs['liczba_ludnosci']
-    dfs['%_zaszczepionych_pen_dawk'] = dfs['w3_zaszczepieni_pelna_dawka'] / dfs['liczba_ludnosci']
+    dfs['%_zaszczepionych'] = 100 * dfs['w1_zaszczepieni_pacjenci'] / dfs['liczba_ludnosci']
+    dfs['%_zaszczepionych_pen_dawk'] = 100 * dfs['w3_zaszczepieni_pelna_dawka'] / dfs['liczba_ludnosci']
     dfs = dfs.reset_index(level=['wojewodztwo_nazwa', 'powiat_nazwa', 'stan_rekordu_na'])
     dfs['stan_rekordu_na'] = pd.to_datetime(dfs['stan_rekordu_na'])
 
@@ -161,8 +161,7 @@ def get_district_vacc_data() -> DataFrame:
 
     for column in list(dfs.columns):
         if dfs[column].dtypes == float or dfs[column].dtypes == int:
-            dfs[column] = dfs[column].apply(lambda x: round(x, 3))
-            # Working for round(x, 2), changed to 3
+            dfs[column] = dfs[column].apply(lambda x: round(x, 2))
     return dfs
 
 
@@ -209,8 +208,8 @@ def get_province_full() -> DataFrame:
         }
     )
     vacc_df = vacc_df.reset_index(level=['wojewodztwo_nazwa', 'dane_na_dzien'])
-    vacc_df['%_zaszczepionych'] = vacc_df['w1_zaszczepieni_pacjenci'] / vacc_df['liczba_ludnosci']
-    vacc_df['%_zaszczepionych_pen_dawk'] = vacc_df['w3_zaszczepieni_pelna_dawka'] / vacc_df['liczba_ludnosci']
+    vacc_df['%_zaszczepionych'] = 100 * vacc_df['w1_zaszczepieni_pacjenci'] / vacc_df['liczba_ludnosci']
+    vacc_df['%_zaszczepionych_pen_dawk'] = 100 * vacc_df['w3_zaszczepieni_pelna_dawka'] / vacc_df['liczba_ludnosci']
 
     vacc_df['dane_na_dzien'] = pd.to_datetime(vacc_df['dane_na_dzien'])
     stat_df['stan_rekordu_na'] = stat_df['stan_rekordu_na'].astype('datetime64[ns]')
@@ -224,8 +223,7 @@ def get_province_full() -> DataFrame:
 
     for column in list(province_df.columns):
         if province_df[column].dtypes == float or province_df[column].dtypes == int:
-            province_df[column] = province_df[column].apply(lambda x: round(x, 3))
-            # Working for round(x,2), changed to 3
+            province_df[column] = province_df[column].apply(lambda x: round(x, 2))
     province_df.to_csv('province_full.csv', index=False)
     return province_df
 
