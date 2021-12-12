@@ -57,9 +57,3 @@ df_small = df[['iso_code', 'continent', 'location', 'date', 'population', 'total
 
 def get_owid_small():
     return df_small
-
-
-# def get_owid_df_with_columns(dataframe, query):
-#     dataframe = dataframe
-#     dataframe = query_match(df=dataframe, query=query, data_column='date')
-#     return dataframe
