@@ -5,11 +5,11 @@ services:
     container_name: data_provider
     build:
       context: visualisation/data-provider
-      dockerfile: Dockerfile_provider
+      dockerfile: Dockerfile
     ports:
       - 5000:5000
     volumes:
-      - ./visualisation/data-provider:/app
+      - ./visualisation/data-provider:/covid
 #    depends_on:
 #      database:
 #        condition: service_healthy
