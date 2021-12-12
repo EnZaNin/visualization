@@ -4,16 +4,13 @@ import matplotlib.pyplot as plt
 import logging
 
 from http.client import HTTPException
-import re
 from fastapi import FastAPI, HTTPException, Query, Depends
 
-import urllib.request
 import os
 import pandas as pd
 import json
-from matplotlib import ticker
 from fastapi.responses import FileResponse
-from typing import Optional, Dict, List
+from typing import Optional, List
 from .schemas.seaborn_schema import LinePlot, BoxPlot, HistPlot, ScatterPlot, JointPlot, RelPlot, CatPlot, PairPlot
 
 from .polish_data import get_district_stats_data, get_district_vacc_data, get_province_full
@@ -96,10 +93,7 @@ async def get_part_of_dataframe(*, data_source: str, columns: list = Query([]), 
         raise HTTPException(status_code=404, detail='Dataframe not found')
     smaller_df = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     if smaller_df.shape[0] > 100:
-        # print('hello')
         smaller_df = smaller_df.tail(100).T
-        # print(smaller_df)
-        # raise HTTPException(status_code=404, detail='Dataframe not found')
 
     result = smaller_df.to_json(date_format='iso')
     logger.info('Loaded dataframe into json')
@@ -160,10 +154,7 @@ async def get_summary_statistics(*, data_source: str, columns: list = Query([]),
     dfr_stats_filtered = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     dfr_stats = dfr_stats_filtered.describe().T
     dfr_stats['missing'] = dfr_stats_filtered.isnull().sum()
-    # print(dfr_stats['dtype'])
-    # print(list(dfr_stats_filtered.dtypes))
     dfr_stats = dfr_stats.apply(lambda x: round(x, 2))
-    # dfr_stats['dtype'] = dfr_stats_filtered.dtypes
     result = dfr_stats.T.to_json(date_format='iso')
     return json.loads(result)
 
@@ -175,12 +166,10 @@ async def get_stats_for_last_day(data_source: str):
     else:
         raise HTTPException(status_code=404, detail='Dataframe not found')
     if 'date' in list(dataframe.columns):
-        # print(pd.unique(dataframe['date']))
         date = pd.unique(dataframe['date'])
         date.sort()
         date_key = date[-1]
         dataframe = dataframe[dataframe['date'] == date_key]
-        # print(dataframe)
         dfr_stats = dataframe.describe().T
         dfr_stats['missing'] = dataframe.isnull().sum()
         dfr_stats = dfr_stats.apply(lambda x: round(x, 2))
@@ -191,7 +180,6 @@ async def get_stats_for_last_day(data_source: str):
         date.sort()
         date_key = date[-1]
         dataframe = dataframe[dataframe['stan_rekordu_na'] == date_key]
-        # print(dataframe)
         dfr_stats = dataframe.describe().T
         dfr_stats['missing'] = dataframe.isnull().sum()
         dfr_stats = dfr_stats.apply(lambda x: round(x, 2))
@@ -208,8 +196,6 @@ async def get_pivot(*, columns: list = Query([]), conditions: list = Query([]), 
                     values: list = Query([]), pivot_rows: list = Query([]), pivot_columns: list = Query([]),
                     agg_func: list = Depends(agg_dict)):
     if not data_source:
-        # for k, v in agg_func[0].items():
-        #     print(k, v)
         dataframe = df_small
         dataframe = dataframe[dataframe['date'].isin(dataframe['date'].sample(10))]
         dataframe = dataframe[dataframe['location'].isin(dataframe['location'].sample(10))]
@@ -475,7 +461,6 @@ async def heatmap(*, columns: list = Query([]), conditions: list = Query([]), da
     if os.path.isfile(chart):
         raise HTTPException(status_code=404, detail='Chart with that name already exist')
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
-    # print(dataframe)
     dataframe = dataframe.pivot(value, x, y)
     try:
         ax = sns.heatmap(dataframe)
@@ -516,24 +501,10 @@ async def jointplot(*, params: JointPlot, columns: list = Query([]), conditions:
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     try:
         g = sns.jointplot(data=dataframe, **params.dict())
-        # fig = ax.get_figure()
-        # plt.xticks(rotation=30)
-        # plt.figure(figsize=(14, 8))
-        # g.ax_joint.set_xticks(rotation=30)
         for tick in g.ax_joint.get_xticklabels():
             tick.set_rotation(30)
     except ValueError or AttributeError:
         raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
-    # if params.x == 'stan_rekordu_na':
-    #     min_date = dataframe['stan_rekordu_na'].min()
-    #     max_date = dataframe['stan_rekordu_na'].max()
-    #     ax2 = g.axes[0].twiny()
-    #     auto_scaler_date(min_date=min_date, max_date=max_date, ax=ax2)
-    # elif params.x == 'date':
-    #     min_date = dataframe['date'].min()
-    #     max_date = dataframe['date'].max()
-    #     ax2 = g.axes[0].twiny()
-    #     auto_scaler_date(min_date=min_date, max_date=max_date, ax=ax2)
     plt.savefig(chart)
     return FileResponse(chart)
 
@@ -547,7 +518,6 @@ async def catplot(*, params: CatPlot, columns: list = Query([]), conditions: lis
                         col_wrap=4)
         min_date = dataframe['stan_rekordu_na'].min()
         max_date = dataframe['stan_rekordu_na'].max()
-        # print(min_date, max_date)
         ax2 = g.axes[0].twiny()
         auto_scaler_date(min_date=min_date, max_date=max_date, ax=ax2)
         chart = 'CatPlot'
@@ -568,14 +538,9 @@ async def catplot(*, params: CatPlot, columns: list = Query([]), conditions: lis
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     try:
         g = sns.catplot(data=dataframe, **params.dict())
-        # print(params.x)
         if params.x == 'stan_rekordu_na':
             min_date = dataframe['stan_rekordu_na'].min()
             max_date = dataframe['stan_rekordu_na'].max()
-            # print(min_date, max_date)
-            # for ax in g.axes.flat:
-            #     ax.xaxis.set_major_locator(ticker.MultipleLocator(24))
-            #     ax.set_xticklabels(ax.get_xticklabels(), rotation=30)
             ax2 = g.axes[0].twiny()
             auto_scaler_date(min_date=min_date, max_date=max_date, ax=ax2)
         elif params.x == 'date':
@@ -701,47 +666,3 @@ async def mds(*, columns: list = Query([]), conditions: list = Query([]), column
     chart = mds_method(chart_name=chart_name, dataframe=dataframe, columns_for_mds=columns_for_mds,
                        column_filter=column_filter)
     return FileResponse(chart)
-    # if not data_source:
-    #     dataframe = province_full_data
-    #         dataframe = dataframe[dataframe['location'].isin(
-    #             ['Poland', 'Germany', 'Italy', 'Czechia', 'Russia', 'Slovakia', 'Ukraine', 'France'])]
-    #         columns = ['total_cases', 'new_cases', 'total_deaths', 'new_deaths',
-    #                    'total_tests', 'new_tests', 'total_vaccinations',
-    #                    'people_vaccinated', 'people_fully_vaccinated', 'total_boosters', 'new_vaccinations']
-    # columns = ['liczba_przypadkow', 'zgony_w_wyniku_covid_bez_chorob_wspolistniejacych',
-    #            'zgony_w_wyniku_covid_i_chorob_wspolistniejacych', 'liczba_zlecen_poz', 'liczba_ozdrowiencow',
-    #            'liczba_osob_objetych_kwarantanna', 'liczba_wykonanych_testow',
-    #            'liczba_testow_z_wynikiem_pozytywnym', 'liczba_testow_z_wynikiem_negatywnym']
-    # filter = 'wojewodztwo'
-    # chart = 'mds.png'
-    # mds_method(chart_name=chart, dataframe=dataframe, column_filter=filter, columns_for_pca=columns)
-    # return FileResponse(chart)
-
-# from .database import engine, Base
-# Base.metadata.create_all(engine)
-
-# from sqlalchemy import inspect
-# inspector = inspect(engine)
-
-# if not inspector.has_table(engine, 'owid'):
-# df.to_sql('owid', con=engine, if_exists='replace', index=False)
-# from sqlalchemy.orm import Session
-# from .dependencies import get_db
-# from fastapi import Depends
-
-# @app_provider.get('/dataframeee')
-# def get_users(db: Session = Depends(get_db)):
-# db_data = pd.read_sql_query(''' select sum(w3_zaszczepieni_pelna_dawka) from poland_vacc where dane_na_dzien = '2021-11-24' ''', engine)
-# db_data = db.query('table_owid').offset(0).all()
-#     # db_data = engine.execute('select * from table_owid').fetchall()
-#     db_data = DataDbTools(db)
-#     data = db_data.get_from()
-
-# print(db_data.info())
-# return db_data
-
-# @app_provider.post('/sql_query')
-# def set_dataframe_by_sql_query(condition: str):
-
-# df = pd.read_sql_query(f''' {condition} ''', engine)
-# return df

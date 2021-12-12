@@ -73,7 +73,6 @@ def get_district_stats_data() -> DataFrame:
     for column in list(dataframe.columns):
         if dataframe[column].dtypes == float or dataframe[column].dtypes == int:
             dataframe[column] = dataframe[column].apply(lambda x: round(x, 3))
-            # Working for round(x,2), changed to 3
     dataframe.to_csv('gov_data.csv', index=False)
     return dataframe
 

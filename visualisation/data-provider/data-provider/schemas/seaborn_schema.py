@@ -1,4 +1,4 @@
-from typing import Optional, Any, Dict, List
+from typing import Optional, Any, List
 from pydantic import BaseModel
 
 
@@ -17,10 +17,6 @@ class BoxPlot(BaseModel):
     y: Optional[str] = None
     hue: Optional[str] = None
     orient: Optional[str] = None
-
-
-# class Filter(BaseModel):
-#     filters: Optional[List[Dict[str, str]]] = None
 
 
 class HistPlot(BaseModel):

@@ -131,9 +131,6 @@ def mds_method(chart_name, dataframe, column_filter, columns_for_mds):
     x = df_x
     model2d = MDS(n_components=2)
     x_trans = model2d.fit_transform(x)
-    # print('The new shape of X: ', X_trans.shape)
-    # print('No. of Iterations: ', model2d.n_iter_)
-    # print('Stress: ', model2d.stress_)
     mds_df = pd.DataFrame(data=x_trans, columns=['Standard X', 'Standard Y'])
 
     mds_df[column_filter] = df_y
