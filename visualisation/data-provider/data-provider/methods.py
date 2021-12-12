@@ -123,12 +123,12 @@ def pca_method(chart_name, dataframe, columns_for_pca, column_filter, n_componen
 
 
 def mds_method(chart_name, dataframe, column_filter, columns_for_mds):
-    dataframe = dataframe.groupby([column_filter]).mean()
-    dataframe = dataframe.reset_index(level=[column_filter])
+    # dataframe = dataframe.groupby([column_filter]).mean()
+    # dataframe = dataframe.reset_index(level=[column_filter])
     df_x = dataframe.loc[:, columns_for_mds].values
     df_y = dataframe.loc[:, column_filter].values
-    x = StandardScaler().fit_transform(df_x)
-    # x = df_x
+    # x = StandardScaler().fit_transform(df_x)
+    x = df_x
     model2d = MDS(n_components=2)
     x_trans = model2d.fit_transform(x)
     # print('The new shape of X: ', X_trans.shape)

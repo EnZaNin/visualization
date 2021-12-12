@@ -77,18 +77,18 @@ Examples of necessary quotes:
     And that is what you need to know how to work with data!
 """
 
-app_provider = FastAPI(title="CovidEDA",
-                       description=description,
-                       version="0.0.1",
-                       # terms_of_service="http://example.com/terms/",
-                       contact={
+covid_app = FastAPI(title="CovidEDA",
+                    description=description,
+                    version="0.0.1",
+                    # terms_of_service="http://example.com/terms/",
+                    contact={
                            "name": "Tomasz Wawrykowicz",
                            # "url": "http://x-force.example.com/contact/",
                            "email": "246823@student.pwr.edu.pl",
                        }, )
 
 
-@app_provider.get('/dataframe/part')
+@covid_app.get('/dataframe/part')
 async def get_part_of_dataframe(*, data_source: str, columns: list = Query([]), conditions: list = Query([])):
     if data_source in dict_full.keys():
         dataframe = dict_full.get(data_source)
@@ -106,7 +106,7 @@ async def get_part_of_dataframe(*, data_source: str, columns: list = Query([]), 
     return json.loads(result)
 
 
-@app_provider.get('/dataframe/sample')
+@covid_app.get('/dataframe/sample')
 async def get_sample_from_dataframe(dataframe: str, orient: Optional[str] = None):
     """
     Get a random sample from DataFrame
@@ -124,7 +124,7 @@ async def get_sample_from_dataframe(dataframe: str, orient: Optional[str] = None
         raise HTTPException(status_code=404, detail='Wrong name')
 
 
-@app_provider.get('/df/{dataframe}')
+@covid_app.get('/df/{dataframe}')
 async def get_columns(dataframe: str):
     """
     Get columns from DataFrame
@@ -138,7 +138,7 @@ async def get_columns(dataframe: str):
         raise HTTPException(status_code=404, detail='Dataframe not found')
 
 
-@app_provider.get('/stats')
+@covid_app.get('/stats')
 async def get_summary_statistics(*, data_source: str, columns: list = Query([]), conditions: list = Query([])):
     """
     Get summary statistics from DataFrame
@@ -168,7 +168,7 @@ async def get_summary_statistics(*, data_source: str, columns: list = Query([]),
     return json.loads(result)
 
 
-@app_provider.get('/lastday')
+@covid_app.get('/lastday')
 async def get_stats_for_last_day(data_source: str):
     if data_source in dict_full.keys():
         dataframe = dict_full.get(data_source)
@@ -203,7 +203,7 @@ def agg_dict(aggfunc: List[str] = Query([])):
     return list(map(json.loads, aggfunc))
 
 
-@app_provider.get('/pivot')
+@covid_app.get('/pivot')
 async def get_pivot(*, columns: list = Query([]), conditions: list = Query([]), data_source: Optional[str] = None,
                     values: list = Query([]), pivot_rows: list = Query([]), pivot_columns: list = Query([]),
                     agg_func: list = Depends(agg_dict)):
@@ -238,7 +238,7 @@ async def get_pivot(*, columns: list = Query([]), conditions: list = Query([]), 
     return json.loads(result)
 
 
-@app_provider.get('/charts')
+@covid_app.get('/charts')
 async def get_name_all_created_charts():
     files = os.listdir()
     chart_list = []
@@ -248,7 +248,7 @@ async def get_name_all_created_charts():
     return chart_list
 
 
-@app_provider.get('/chart/{chart_name}')
+@covid_app.get('/chart/{chart_name}')
 async def get_chart_by_name(chart_name: str):
     chart = chart_name + '.png'
     if not os.path.isfile(chart):
@@ -256,7 +256,7 @@ async def get_chart_by_name(chart_name: str):
     return FileResponse(chart)
 
 
-@app_provider.put('/update')
+@covid_app.put('/update')
 async def update_data_manually():
     os.remove('owid_data.csv')
     os.remove('szczepienia.csv')
@@ -267,7 +267,7 @@ async def update_data_manually():
     reload_data()
 
 
-@app_provider.post('/lineplot', summary="Create lineplot for selected data")
+@covid_app.post('/lineplot', summary="Create lineplot for selected data")
 async def lineplot(*, parameters: LinePlot, columns: list = Query([]), conditions: list = Query([]),
                    data_source: Optional[str] = None, chart_name: Optional[str] = None, xlabel: Optional[str] = None,
                    ylabel: Optional[str] = None):
@@ -321,7 +321,7 @@ async def lineplot(*, parameters: LinePlot, columns: list = Query([]), condition
     return FileResponse(chart)
 
 
-@app_provider.post('/boxplot')
+@covid_app.post('/boxplot')
 async def boxplot(*, params: BoxPlot, columns: list = Query([]), conditions: list = Query([]),
                   data_source: Optional[str] = None, chart_name: Optional[str] = None, xlabel: Optional[str] = None,
                   ylabel: Optional[str] = None, add_points: Optional[bool] = False):
@@ -367,7 +367,7 @@ async def boxplot(*, params: BoxPlot, columns: list = Query([]), conditions: lis
     return FileResponse(chart)
 
 
-@app_provider.post('/histplot')
+@covid_app.post('/histplot')
 async def histplot(*, params: HistPlot, columns: list = Query([]), conditions: list = Query([]),
                    data_source: Optional[str] = None, chart_name: Optional[str] = None, xlabel: Optional[str] = None,
                    ylabel: Optional[str] = None):
@@ -411,7 +411,7 @@ async def histplot(*, params: HistPlot, columns: list = Query([]), conditions: l
     return FileResponse(chart)
 
 
-@app_provider.post('/scatterplot')
+@covid_app.post('/scatterplot')
 async def scatterplot(*, params: ScatterPlot, columns: list = Query([]), conditions: list = Query([]),
                       data_source: Optional[str] = None, chart_name: Optional[str] = None, xlabel: Optional[str] = None,
                       ylabel: Optional[str] = None):
@@ -462,7 +462,7 @@ async def scatterplot(*, params: ScatterPlot, columns: list = Query([]), conditi
     return FileResponse(chart)
 
 
-@app_provider.post('/heatmap')
+@covid_app.post('/heatmap')
 async def heatmap(*, columns: list = Query([]), conditions: list = Query([]), data_source: str,
                   chart_name: str, value: str, x: str, y: str):
     if data_source in dict_full.keys():
@@ -485,7 +485,7 @@ async def heatmap(*, columns: list = Query([]), conditions: list = Query([]), da
     return FileResponse(chart)
 
 
-@app_provider.post('/jointplot')
+@covid_app.post('/jointplot')
 async def jointplot(*, params: JointPlot, columns: list = Query([]), conditions: list = Query([]),
                     data_source: Optional[str] = None, chart_name: Optional[str] = None):
     plt.clf()
@@ -538,7 +538,7 @@ async def jointplot(*, params: JointPlot, columns: list = Query([]), conditions:
     return FileResponse(chart)
 
 
-@app_provider.post('/catplot')
+@covid_app.post('/catplot')
 async def catplot(*, params: CatPlot, columns: list = Query([]), conditions: list = Query([]),
                   data_source: Optional[str] = None, chart_name: Optional[str] = None):
     if not data_source:
@@ -589,7 +589,7 @@ async def catplot(*, params: CatPlot, columns: list = Query([]), conditions: lis
     return FileResponse(chart)
 
 
-@app_provider.post('/relplot')
+@covid_app.post('/relplot')
 async def relplot(*, params: RelPlot, columns: list = Query([]), conditions: list = Query([]),
                   data_source: Optional[str] = None, chart_name: Optional[str] = None):
     if data_source in dict_full.keys():
@@ -610,7 +610,7 @@ async def relplot(*, params: RelPlot, columns: list = Query([]), conditions: lis
     return FileResponse(chart)
 
 
-@app_provider.post('/pairplot')
+@covid_app.post('/pairplot')
 async def pairplot(*, params: PairPlot, columns: list = Query([]), conditions: list = Query([]),
                    data_source: Optional[str] = None, chart_name: Optional[str] = None):
     if not data_source:
@@ -641,15 +641,16 @@ async def pairplot(*, params: PairPlot, columns: list = Query([]), conditions: l
     return FileResponse(chart)
 
 
-@app_provider.post('/pca')
+@covid_app.post('/pca')
 async def pca(*, columns: list = Query([]), conditions: list = Query([]), columns_for_pca: list = Query([]),
               data_source: Optional[str] = None, chart_name: Optional[str] = None, column_filter: Optional[str] = None):
     if not data_source:
         dataframe = province_full_data
         columns = ['liczba_przypadkow', 'zgony_w_wyniku_covid_bez_chorob_wspolistniejacych',
-                   'zgony_w_wyniku_covid_i_chorob_wspolistniejacych', 'liczba_zlecen_poz', 'liczba_ozdrowiencow',
+                   'zgony_w_wyniku_covid_i_chorob_wspolistniejacych', 'liczba_ozdrowiencow',
                    'liczba_osob_objetych_kwarantanna', 'liczba_wykonanych_testow',
-                   'liczba_testow_z_wynikiem_pozytywnym', 'liczba_testow_z_wynikiem_negatywnym']
+                   'liczba_testow_z_wynikiem_pozytywnym', 'liczba_testow_z_wynikiem_negatywnym',
+                   'w1_zaszczepieni_pacjenci', 'w3_zaszczepieni_pelna_dawka']
         column_filter = 'wojewodztwo'
         chart_name = 'PCA'
         chart = pca_method(chart_name=chart_name, dataframe=dataframe, columns_for_pca=columns,
@@ -673,7 +674,7 @@ async def pca(*, columns: list = Query([]), conditions: list = Query([]), column
     return FileResponse(chart)
 
 
-@app_provider.post('/mds')
+@covid_app.post('/mds')
 async def mds(*, columns: list = Query([]), conditions: list = Query([]), columns_for_mds: list = Query([]),
               data_source: Optional[str] = None, chart_name: Optional[str] = None, column_filter: Optional[str] = None):
     if not data_source:
