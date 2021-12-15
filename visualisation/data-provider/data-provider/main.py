@@ -93,9 +93,9 @@ async def get_part_of_dataframe(*, data_source: str, columns: list = Query([]), 
         raise HTTPException(status_code=404, detail='Dataframe not found')
     smaller_df = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     if smaller_df.shape[0] > 100:
-        smaller_df = smaller_df.tail(100).T
+        smaller_df = smaller_df.tail(100)
 
-    result = smaller_df.to_json(date_format='iso')
+    result = smaller_df.T.to_json(date_format='iso')
     logger.info('Loaded dataframe into json')
     return json.loads(result)
 
@@ -231,6 +231,8 @@ async def get_name_all_created_charts():
     for file in files:
         if file.endswith('.png'):
             chart_list.append(file)
+    if len(chart_list) == 0:
+        raise HTTPException(status_code=404, detail='Empty list - no charts')
     return chart_list
 
 
