@@ -12,4 +12,4 @@ work with app:
 
 ./main.sh provider clear all    -delete all files and download again new files
 
-.main.sh provider reset   - clear all + provider build + provider up
+./main.sh provider reset   - clear all + provider build + provider up
