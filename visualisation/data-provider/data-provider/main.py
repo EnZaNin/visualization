@@ -284,14 +284,14 @@ async def lineplot(*, parameters: LinePlot, columns: list = Query([]), condition
         raise HTTPException(status_code=404, detail='Please, select correctly data source')
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     if not chart_name:
-        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+        raise HTTPException(status_code=400, detail='Please, give a name for chart')
     chart = chart_name + '.png'
     if os.path.isfile(chart):
-        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+        raise HTTPException(status_code=400, detail='Chart with that name already exist')
     try:
         ax = sns.lineplot(data=dataframe, **parameters.dict())
     except ValueError or AttributeError:
-        raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
+        raise HTTPException(status_code=400, detail='Ups, something was wrong, chceck your parameters')
     if parameters.x == 'date':
         min_date = dataframe['date'].min()
         max_date = dataframe['date'].max()
@@ -331,10 +331,10 @@ async def boxplot(*, params: BoxPlot, columns: list = Query([]), conditions: lis
     else:
         raise HTTPException(status_code=404, detail='Please, select correctly data source')
     if not chart_name:
-        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+        raise HTTPException(status_code=400, detail='Please, give a name for chart')
     chart = chart_name + '.png'
     if os.path.isfile(chart):
-        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+        raise HTTPException(status_code=400, detail='Chart with that name already exist')
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
 
     plt.figure(figsize=(12, 8))
@@ -380,16 +380,16 @@ async def histplot(*, params: HistPlot, columns: list = Query([]), conditions: l
     else:
         raise HTTPException(status_code=404, detail='Please, select correctly data source')
     if not chart_name:
-        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+        raise HTTPException(status_code=400, detail='Please, give a name for chart')
     chart = chart_name + '.png'
     if os.path.isfile(chart):
-        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+        raise HTTPException(status_code=400, detail='Chart with that name already exist')
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     plt.figure(figsize=(24, 13.5), dpi=80)
     try:
         ax = sns.histplot(data=dataframe, **params.dict())
     except ValueError or AttributeError:
-        raise HTTPException(status_code=404, detail='Ups, something was wrong, chceck your parameters')
+        raise HTTPException(status_code=400, detail='Ups, something was wrong, chceck your parameters')
     if xlabel:
         ax.set_xlabel(xlabel, fontsize=15)
     if ylabel:
@@ -431,10 +431,10 @@ async def scatterplot(*, params: ScatterPlot, columns: list = Query([]), conditi
     else:
         raise HTTPException(status_code=404, detail='Please, select correctly data source')
     if not chart_name:
-        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+        raise HTTPException(status_code=400, detail='Please, give a name for chart')
     chart = chart_name + '.png'
     if os.path.isfile(chart):
-        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+        raise HTTPException(status_code=400, detail='Chart with that name already exist')
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     plt.figure(figsize=(12, 8))
     try:
@@ -458,10 +458,10 @@ async def heatmap(*, columns: list = Query([]), conditions: list = Query([]), da
     else:
         raise HTTPException(status_code=404, detail='Please, select correctly data source')
     if not chart_name:
-        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+        raise HTTPException(status_code=400, detail='Please, give a name for chart')
     chart = chart_name + '.png'
     if os.path.isfile(chart):
-        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+        raise HTTPException(status_code=400, detail='Chart with that name already exist')
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     dataframe = dataframe.pivot(value, x, y)
     try:
@@ -496,10 +496,10 @@ async def jointplot(*, params: JointPlot, columns: list = Query([]), conditions:
     else:
         raise HTTPException(status_code=404, detail='Please, select correctly data source')
     if not chart_name:
-        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+        raise HTTPException(status_code=400, detail='Please, give a name for chart')
     chart = chart_name + '.png'
     if os.path.isfile(chart):
-        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+        raise HTTPException(status_code=400, detail='Chart with that name already exist')
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     try:
         g = sns.jointplot(data=dataframe, **params.dict())
@@ -533,10 +533,10 @@ async def catplot(*, params: CatPlot, columns: list = Query([]), conditions: lis
     else:
         raise HTTPException(status_code=404, detail='Please, select correctly data source')
     if not chart_name:
-        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+        raise HTTPException(status_code=400, detail='Please, give a name for chart')
     chart = chart_name + '.png'
     if os.path.isfile(chart):
-        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+        raise HTTPException(status_code=400, detail='Chart with that name already exist')
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     try:
         g = sns.catplot(data=dataframe, **params.dict())
@@ -551,7 +551,7 @@ async def catplot(*, params: CatPlot, columns: list = Query([]), conditions: lis
             ax2 = g.axes[0].twiny()
             auto_scaler_date(min_date=min_date, max_date=max_date, ax=ax2)
     except ValueError or AttributeError:
-        raise HTTPException(status_code=404, detail='Ups, something was wrong, check your parameters')
+        raise HTTPException(status_code=400, detail='Ups, something was wrong, check your parameters')
     plt.savefig(chart)
     return FileResponse(chart)
 
@@ -564,10 +564,10 @@ async def relplot(*, params: RelPlot, columns: list = Query([]), conditions: lis
     else:
         raise HTTPException(status_code=404, detail='Please, select correctly data source')
     if not chart_name:
-        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+        raise HTTPException(status_code=400, detail='Please, give a name for chart')
     chart = chart_name + '.png'
     if os.path.isfile(chart):
-        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+        raise HTTPException(status_code=400, detail='Chart with that name already exist')
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     try:
         sns.relplot(data=dataframe, **params.dict())
@@ -594,10 +594,10 @@ async def pairplot(*, params: PairPlot, columns: list = Query([]), conditions: l
     else:
         raise HTTPException(status_code=404, detail='Please, select correctly data source')
     if not chart_name:
-        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+        raise HTTPException(status_code=400, detail='Please, give a name for chart')
     chart = chart_name + '.png'
     if os.path.isfile(chart):
-        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+        raise HTTPException(status_code=400, detail='Chart with that name already exist')
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     plt.figure(figsize=(12, 8))
     try:
@@ -628,7 +628,7 @@ async def pca(*, columns: list = Query([]), conditions: list = Query([]), column
     else:
         raise HTTPException(status_code=404, detail='Dataframe not found')
     if not chart_name:
-        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+        raise HTTPException(status_code=400, detail='Please, give a name for chart')
     chart = chart_name + '.png'
     if os.path.isfile(chart):
         raise HTTPException(status_code=404, detail='Chart with that name already exist')
@@ -637,7 +637,7 @@ async def pca(*, columns: list = Query([]), conditions: list = Query([]), column
         chart = pca_method(chart_name=chart_name, dataframe=dataframe, columns_for_pca=columns_for_pca,
                            column_filter=column_filter, n_components=2)
     except ValueError:
-        raise HTTPException(status_code=411, detail='Error with PCA algorithm')
+        raise HTTPException(status_code=400, detail='Error with PCA algorithm')
     return FileResponse(chart)
 
 
@@ -660,10 +660,10 @@ async def mds(*, columns: list = Query([]), conditions: list = Query([]), column
     else:
         raise HTTPException(status_code=404, detail='Dataframe not found')
     if not chart_name:
-        raise HTTPException(status_code=404, detail='Please, give a name for chart')
+        raise HTTPException(status_code=400, detail='Please, give a name for chart')
     chart = chart_name + '.png'
     if os.path.isfile(chart):
-        raise HTTPException(status_code=404, detail='Chart with that name already exist')
+        raise HTTPException(status_code=400, detail='Chart with that name already exist')
     dataframe = get_filtered_data(df=dataframe, columns=columns, query=conditions)
     chart = mds_method(chart_name=chart_name, dataframe=dataframe, columns_for_mds=columns_for_mds,
                        column_filter=column_filter)
